@@ -24,14 +24,14 @@ def save_message():
 @app.route('/upload_audio', methods=['POST'])
 def upload_audio():
     if 'audio' not in request.files:
-        return jsonify({'error': 'No audio file'}), 400
+        return jsonify({'success': False, 'error': 'No audio file'}), 400
 
     audio_file = request.files['audio']
     filename = str(uuid.uuid4()) + '.wav'
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     audio_file.save(filepath)
 
-    return jsonify({'url': f'/audio/{filename}'})
+    return jsonify({'success': True, 'url': f'/audio/{filename}'})
 
 @app.route('/audio/<filename>')
 def serve_audio(filename):
