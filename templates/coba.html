@@ -60,7 +60,10 @@
             console.error('Connection error:', error);
         });
 
-        const socket = io();
+        const socket = io({
+            transports: ['polling', 'websocket'],
+            upgrade: false
+        });
         let localStream;
         let peerConnection;
 

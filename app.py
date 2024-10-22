@@ -2,10 +2,16 @@ from flask import Flask, render_template, request, jsonify, send_file
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import os
 import uuid
+from flask_cors import CORS
+import logging
 
 app = Flask(__name__)
+CORS(app)
 app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='asgi')
+
+logging.getLogger('socketio').setLevel(logging.DEBUG)
+logging.getLogger('engineio').setLevel(logging.DEBUG)
 
 UPLOAD_FOLDER = 'temp_audio'
 if not os.path.exists(UPLOAD_FOLDER):
@@ -75,5 +81,10 @@ def on_call_accepted(data):
 def on_call_rejected(data):
     emit('call_rejected', room=data['target'])
 
+@socketio.on_error()
+def error_handler(e):
+    print('An error has occurred: ' + str(e))
+
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    import uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=8000)
