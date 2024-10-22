@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+
+{% block title %}ARS CHAT ROOM{% endblock %}
+
+{% block header %}
+<div class="header-container">
+    <h1>ARS CHAT ROOM</h1>
+    <div class="call-container">
+        <button id="startCall" onclick="startCall()">Mulai Panggilan</button>
+        <button id="endCall" onclick="endCall()" style="display: none;">Akhiri Panggilan</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+    <div class="chat-container" id="chat-container"></div>
+    <div class="input-id-container" id="inputId" style="display: none;">
+        <input type="text" id="subscribeTopicInput" placeholder="Masukkan ID Anda">
+        <input type="text" id="topicInput" placeholder="Masukkan Tujuan">
+        <button class="button-ok" onclick="subscribeTopic()">OK</button>
+    </div>
+    <div class="input-container">
+        <input type="text" id="messageInput" placeholder="Masukkan Pesan">
+        <span class="send-icon" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></span>
+        <span class="key-icon" onclick="toggleInputId()">🔑</span>
+        <label for="fileInput" class="file-label"><i class="fas fa-paperclip"></i></label>
+        <input type="file" id="fileInput" accept="image/*" onchange="sendImage()">
+        <span class="mic-icon" onclick="toggleRecording()"><i class="fas fa-microphone"></i></span>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+        const broker = 'wss://broker.emqx.io:8084/mqtt';
+        const client = mqtt.connect(broker);
+
+        client.on('connect', () => {
+            console.log('Connected to MQTT broker');
+        });
+
+        client.on('message', (receivedTopic, message) => {
+            if (receivedTopic && receivedTopic !== client.options.clientId) {
+                console.log('Received message:', receivedTopic, message.toString());
+                try {
+                    const parsedMessage = JSON.parse(message.toString());
+                    if (parsedMessage.type === "audio") {
+                        displayMessage(receivedTopic, `<audio controls src="${parsedMessage.url}"></audio>`);
+                    } else {
+                        displayMessage(receivedTopic, message.toString());
+                    }
+                } catch (e) {
+                    displayMessage(receivedTopic, message.toString());
+                }
+            }
+        });
+
+        client.on('error', (error) => {
+            console.error('Connection error:', error);
+        });
+
+        const socket = io();
+        let localStream;
+        let peerConnection;
+
+        function toggleInputId() {
+            const inputId = document.getElementById('inputId');
+            inputId.style.display = inputId.style.display === 'none' ? 'flex' : 'none';
+        }
+
+        function subscribeTopic() {
+            const subscribeTopic = document.getElementById('subscribeTopicInput').value.trim();
+            if (subscribeTopic) {
+                client.subscribe(subscribeTopic, (err) => {
+                    if (!err) {
+                        displayMessage('', `ID kamu terdaftar: ${subscribeTopic}`);
+                        toggleInputId();
+                    } else {
+                        console.error('Subscription error:', err);
+                        alert('Failed to subscribe to topic');
+                    }
+                });
+            } else {
+                alert('ID cannot be empty!');
+            }
+        }
+
+        function sendMessage() {
+            const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
+            const message = document.getElementById('messageInput').value.trim();
+            if (message) {
+                client.publish(topic, message);
+                displayMessage(' ', message);
+                console.log('Published message:', message);
+                document.getElementById('messageInput').value = '';
+                // Hapus baris berikut:
+                // saveMessageToSheet(message);
+            } else {
+                alert('Pesan tidak boleh kosong!');
+            }
+        }
+
+        function sendImage() {
+            const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64data = reader.result;
+                    client.publish(topic, base64data);
+                    displayMessage(' ', base64data);
+                    console.log('Published image');
+                    // Hapus baris berikut:
+                    // saveMessageToSheet(base64data);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function displayMessage(topic, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+
+            if (topic === ' ' || topic === '  ') {
+                messageElement.classList.add('sent');
+                if (message.startsWith('data:image/')) {
+                    messageElement.innerHTML = `<img src="${message}" alt="Image">`;
+                } else if (message.startsWith('<audio')) {
+                    messageElement.innerHTML = message;
+                } else {
+                    messageElement.innerHTML = `${message}`;
+                }
+            } else {
+                messageElement.classList.add('received');
+                if (message.startsWith('data:image/')) {
+                    messageElement.innerHTML = `<img src="${message}" alt="Image">`;
+                } else if (message.startsWith('<audio')) {
+                    messageElement.innerHTML = message;
+                } else {
+                    messageElement.innerHTML = `${message}`;
+                }
+            }
+
+            const timestamp = document.createElement('span');
+            timestamp.classList.add('timestamp');
+            timestamp.textContent = new Date().toLocaleTimeString();
+            messageElement.appendChild(timestamp);
+
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        let mediaRecorder;
+        let audioChunks = [];
+
+        function toggleRecording() {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
+
+                    mediaRecorder.addEventListener("dataavailable", event => {
+                        audioChunks.push(event.data);
+                    });
+
+                    mediaRecorder.addEventListener("stop", () => {
+                        const audioBlob = new Blob(audioChunks);
+                        sendAudio(audioBlob);
+                        audioChunks = [];
+                    });
+                });
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+        }
+
+        function sendAudio(audioBlob) {
+            const formData = new FormData();
+            formData.append("audio", audioBlob, "recording.wav");
+
+            fetch("/upload_audio", {
+                method: "POST",
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
+                client.publish(topic, JSON.stringify({type: "audio", url: data.url}));
+                displayMessage(' ', `<audio controls src="${data.url}"></audio>`);
+            });
+        }
+
+        let CLIENT_ID = '191320287721-1l6109iq4jckt8msaqc3tvd0c8sum1u9.apps.googleusercontent.com';  // Ganti dengan Client ID Anda
+        let API_KEY = 'AIzaSyBYcKGVYqEN0JjuG8Lzk_j_mefXHjE4384';      // Ganti dengan API Key Anda
+        let SPREADSHEET_ID = '1XWAVVEwPaHzzS4gTa_DO7n1v6Wv6u5A_kmmY2iSrLr8'; // Ganti dengan ID Spreadsheet Anda
+        let DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
+        let SCOPES = "https://www.googleapis.com/auth/spreadsheets";
+
+        function handleClientLoad() {
+            gapi.load('client:auth2', initClient);
+        }
+
+            function initClient() {
+        gapi.client.init({
+            apiKey: API_KEY,
+            clientId: CLIENT_ID,
+            discoveryDocs: DISCOVERY_DOCS,
+            scope: SCOPES
+        }).then(() => {
+            gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
+            updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+        }, (error) => {
+            console.error('Error during API client initialization:', error);
+        });
+    }
+
+    function updateSigninStatus(isSignedIn) {
+        if (isSignedIn) {
+            console.log('User signed in and API ready.');
+        } else {
+            console.log('User not signed in. Please sign in to use Google Sheets.');
+        }
+    }
+
+    function saveMessageToSheet(message) {
+        fetch('/save_message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({message: message}),
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Message saved:', data.message);
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
+    }
+
+        handleClientLoad(); // Initialize the API client and sign in
+
+        function startCall() {
+            const topic = document.getElementById('topicInput').value.trim();
+            if (!topic) {
+                alert('Silakan masukkan alamat tujuan panggilan terlebih dahulu!');
+                return;
+            }
+
+            // Kirim permintaan panggilan ke alamat tujuan
+            socket.emit('call_request', { target: topic });
+
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    localStream = stream;
+                    document.getElementById('startCall').style.display = 'none';
+                    document.getElementById('endCall').style.display = 'inline-block';
+                    
+                    const configuration = { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] };
+                    peerConnection = new RTCPeerConnection(configuration);
+                    
+                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                    
+                    peerConnection.onicecandidate = event => {
+                        if (event.candidate) {
+                            socket.emit('ice_candidate', { candidate: event.candidate, target: topic });
+                        }
+                    };
+                    
+                    peerConnection.ontrack = event => {
+                        const remoteAudio = document.createElement('audio');
+                        remoteAudio.srcObject = event.streams[0];
+                        remoteAudio.autoplay = true;
+                        document.body.appendChild(remoteAudio);
+                    };
+                    
+                    peerConnection.createOffer()
+                        .then(offer => peerConnection.setLocalDescription(offer))
+                        .then(() => {
+                            socket.emit('offer', { offer: peerConnection.localDescription, target: topic });
+                        });
+                })
+                .catch(error => console.error('Error accessing media devices:', error));
+        }
+
+        function endCall() {
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            document.getElementById('startCall').style.display = 'inline-block';
+            document.getElementById('endCall').style.display = 'none';
+        }
+
+        socket.on('offer', data => {
+            if (!peerConnection) {
+                startCall();
+            }
+            peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer))
+                .then(() => peerConnection.createAnswer())
+                .then(answer => peerConnection.setLocalDescription(answer))
+                .then(() => {
+                    socket.emit('answer', { answer: peerConnection.localDescription, target: data.target });
+                });
+        });
+
+        socket.on('answer', data => {
+            peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        });
+
+        socket.on('ice_candidate', data => {
+            if (peerConnection) {
+                peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        });
+
+        // Tambahkan fungsi baru untuk menangani panggilan masuk
+        function handleIncomingCall(caller) {
+            const ringtone = new Audio('/static/ringtone.mp3'); // Pastikan file ringtone.mp3 ada di folder static
+            ringtone.loop = true;
+            ringtone.play();
+
+            const answer = confirm(`Panggilan masuk dari ${caller}. Terima panggilan?`);
+            ringtone.pause();
+
+            if (answer) {
+                // Terima panggilan
+                socket.emit('call_accepted', { target: caller });
+                startCall();
+            } else {
+                // Tolak panggilan
+                socket.emit('call_rejected', { target: caller });
+            }
+        }
+
+        // Tambahkan event listener untuk panggilan masuk
+        socket.on('incoming_call', (data) => {
+            handleIncomingCall(data.caller);
+        });
+
+        // Tambahkan event listener untuk panggilan diterima
+        socket.on('call_accepted', () => {
+            alert('Panggilan diterima!');
+            // Mulai panggilan di sini
+        });
+
+        // Tambahkan event listener untuk panggilan ditolak
+        socket.on('call_rejected', () => {
+            alert('Panggilan ditolak.');
+            endCall();
+        });
+    </script>
+{% endblock %}
