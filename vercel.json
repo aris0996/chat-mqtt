@@ -20,8 +20,19 @@
       "dest": "/static/favicon.ico"
     },
     {
+      "src": "/favicon.png",
+      "dest": "/static/favicon.png"
+    },
+    {
+      "src": "/socket.io/(.*)",
+      "dest": "app.py"
+    },
+    {
       "src": "/(.*)",
       "dest": "app.py"
     }
-  ]
+  ],
+  "env": {
+    "PYTHONUNBUFFERED": "1"
+  }
 }
