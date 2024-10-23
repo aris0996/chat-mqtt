@@ -47,44 +47,11 @@ def index():
 
 @app.route('/upload_audio', methods=['POST'])
 def upload_audio():
-    if 'audio' not in request.files:
-        return jsonify({'success': False, 'error': 'No audio file'}), 400
-
-    audio_file = request.files['audio']
-    if audio_file.filename == '':
-        return jsonify({'success': False, 'error': 'No selected file'}), 400
-
-    if audio_file:
-        filename = secure_filename(audio_file.filename)
-        audio_data = audio_file.read()
-
-        db = next(get_db())
-        try:
-            new_audio = AudioMessage(filename=filename, data=audio_data)
-            db.add(new_audio)
-            db.commit()
-            db.refresh(new_audio)
-            return jsonify({
-                'success': True,
-                'url': f'/get_audio/{new_audio.id}',
-                'message': 'Audio uploaded successfully'
-            }), 200
-        finally:
-            db.close()
-
-    return jsonify({'success': False, 'error': 'Failed to upload audio'}), 500
+    return jsonify({'success': False, 'error': 'Audio upload function removed'}), 400
 
 @app.route('/get_audio/<int:audio_id>', methods=['GET'])
 def get_audio(audio_id):
-    db = next(get_db())
-    try:
-        audio = db.query(AudioMessage).filter(AudioMessage.id == audio_id).first()
-        if audio:
-            return audio.data, 200, {'Content-Type': 'audio/wav'}
-        else:
-            return jsonify({'success': False, 'error': 'Audio not found'}), 404
-    finally:
-        db.close()
+    return jsonify({'success': False, 'error': 'Audio retrieval function removed'}), 400
 
 if __name__ == '__main__':
     socketio.run(app)
