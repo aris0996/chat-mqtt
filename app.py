@@ -5,11 +5,12 @@ import uuid
 from flask_cors import CORS
 import logging
 from werkzeug.utils import secure_filename
-from datetime import datetime, timedelta
+from datetime import datetime
 from sqlalchemy.orm import Session
 from database import get_db, AudioMessage
 from apscheduler.schedulers.background import BackgroundScheduler
 import eventlet
+
 eventlet.monkey_patch()
 
 app = Flask(__name__)
@@ -44,12 +45,6 @@ scheduler.start()
 def index():
     return render_template('coba.html')
 
-@app.route('/save_message', methods=['POST'])
-def save_message():
-    data = request.json
-    message = data.get('message')
-    return jsonify({'status': 'success', 'message': message})
-
 @app.route('/upload_audio', methods=['POST'])
 def upload_audio():
     if 'audio' not in request.files:
@@ -69,7 +64,6 @@ def upload_audio():
             db.add(new_audio)
             db.commit()
             db.refresh(new_audio)
-
             return jsonify({
                 'success': True,
                 'url': f'/get_audio/{new_audio.id}',
@@ -79,52 +73,6 @@ def upload_audio():
             db.close()
 
     return jsonify({'success': False, 'error': 'Failed to upload audio'}), 500
-
-@app.route('/audio/<filename>')
-def serve_audio(filename):
-    return send_file(os.path.join(UPLOAD_FOLDER, filename))
-
-@socketio.on('join')
-def on_join(data):
-    username = data['username']
-    room = data['room']
-    join_room(room)
-    emit('status', {'msg': f'{username} telah bergabung ke ruangan.'}, room=room)
-
-@socketio.on('leave')
-def on_leave(data):
-    username = data['username']
-    room = data['room']
-    leave_room(room)
-    emit('status', {'msg': f'{username} telah meninggalkan ruangan.'}, room=room)
-
-@socketio.on('offer')
-def on_offer(data):
-    emit('offer', data, room=data['target'])
-
-@socketio.on('answer')
-def on_answer(data):
-    emit('answer', data, room=data['target'])
-
-@socketio.on('ice_candidate')
-def on_ice_candidate(data):
-    emit('ice_candidate', data, room=data['target'])
-
-@socketio.on('call_request')
-def on_call_request(data):
-    emit('incoming_call', {'caller': request.sid}, room=data['target'])
-
-@socketio.on('call_accepted')
-def on_call_accepted(data):
-    emit('call_accepted', room=data['target'])
-
-@socketio.on('call_rejected')
-def on_call_rejected(data):
-    emit('call_rejected', room=data['target'])
-
-@socketio.on_error()
-def error_handler(e):
-    print('An error has occurred: ' + str(e))
 
 @app.route('/get_audio/<int:audio_id>', methods=['GET'])
 def get_audio(audio_id):
