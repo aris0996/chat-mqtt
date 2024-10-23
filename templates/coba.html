@@ -5,10 +5,6 @@
 {% block header %}
 <div class="header-container">
     <h1>ARS CHAT ROOM</h1>
-    <div class="call-container">
-        <button id="startCall" onclick="startCall()">Mulai Panggilan</button>
-        <button id="endCall" onclick="endCall()" style="display: none;">Akhiri Panggilan</button>
-    </div>
 </div>
 {% endblock %}
 
@@ -214,124 +210,59 @@
             });
         }
 
-        function startCall() {
-            const topic = document.getElementById('topicInput').value.trim();
-            if (!topic) {
-                alert('Silakan masukkan alamat tujuan panggilan terlebih dahulu!');
-                return;
-            }
-
-            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then(stream => {
-                    localStream = stream;
-                    document.getElementById('startCall').style.display = 'none';
-                    document.getElementById('endCall').style.display = 'inline-block';
-                    
-                    const configuration = { 
-                        'iceServers': [
-                            { 'urls': 'stun:stun.l.google.com:19302' },
-                            { 'urls': 'stun:stun1.l.google.com:19302' },
-                            { 'urls': 'stun:stun2.l.google.com:19302' }
-                        ] 
-                    };
-                    peerConnection = new RTCPeerConnection(configuration);
-                    
-                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-                    
-                    peerConnection.onicecandidate = event => {
-                        if (event.candidate) {
-                            socket.emit('ice_candidate', { candidate: event.candidate, target: topic });
-                        }
-                    };
-                    
-                    peerConnection.ontrack = event => {
-                        const remoteAudio = document.createElement('audio');
-                        remoteAudio.srcObject = event.streams[0];
-                        remoteAudio.autoplay = true;
-                        document.body.appendChild(remoteAudio);
-                    };
-                    
-                    socket.emit('call_request', { target: topic });
-                })
-                .catch(error => {
-                    console.error('Error mengakses perangkat media:', error);
-                    alert('Tidak dapat mengakses mikrofon. Pastikan Anda telah memberikan izin.');
-                });
-        }
-
-        function endCall() {
-            if (peerConnection) {
-                peerConnection.close();
-            }
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
-            document.getElementById('startCall').style.display = 'inline-block';
-            document.getElementById('endCall').style.display = 'none';
-        }
-
-        socket.on('offer', data => {
-            if (!peerConnection) {
-                startCall();
-            }
-            peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer))
-                .then(() => peerConnection.createAnswer())
-                .then(answer => peerConnection.setLocalDescription(answer))
-                .then(() => {
-                    socket.emit('answer', { answer: peerConnection.localDescription, target: data.target });
-                });
-        });
-
-        socket.on('answer', data => {
-            peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-        });
-
-        socket.on('ice_candidate', data => {
-            if (peerConnection) {
-                peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-            }
-        });
-
-        // Tambahkan fungsi baru untuk menangani panggilan masuk
-        function handleIncomingCall(caller) {
-            const ringtone = new Audio('/static/ringtone.mp3'); // Pastikan file ringtone.mp3 ada di folder static
-            ringtone.loop = true;
-            ringtone.play();
-
-            const answer = confirm(`Panggilan masuk dari ${caller}. Terima panggilan?`);
-            ringtone.pause();
-
-            if (answer) {
-                // Terima panggilan
-                socket.emit('call_accepted', { target: caller });
-                startCall();
+        function toggleRecording() {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                stopRecording();
             } else {
-                // Tolak panggilan
-                socket.emit('call_rejected', { target: caller });
+                startRecording();
             }
         }
 
-        // Tambahkan event listener untuk panggilan masuk
-        socket.on('incoming_call', (data) => {
-            handleIncomingCall(data.caller);
-        });
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
 
-        // Tambahkan event listener untuk panggilan diterima
-        socket.on('call_accepted', () => {
-            peerConnection.createOffer()
-                .then(offer => peerConnection.setLocalDescription(offer))
-                .then(() => {
-                    socket.emit('offer', { offer: peerConnection.localDescription, target: document.getElementById('topicInput').value.trim() });
-                })
-                .catch(error => {
-                    console.error('Error saat membuat tawaran:', error);
-                    alert('Terjadi kesalahan saat memulai panggilan. Silakan coba lagi.');
+                    mediaRecorder.addEventListener("dataavailable", event => {
+                        audioChunks.push(event.data);
+                    });
+
+                    mediaRecorder.addEventListener("stop", () => {
+                        const audioBlob = new Blob(audioChunks);
+                        sendAudio(audioBlob);
+                        audioChunks = [];
+                    });
                 });
-        });
+        }
 
-        socket.on('call_rejected', () => {
-            alert('Panggilan ditolak.');
-            endCall();
-        });
+        function stopRecording() {
+            mediaRecorder.stop();
+        }
+
+        function sendAudio(audioBlob) {
+            const formData = new FormData();
+            formData.append("audio", audioBlob, "recording.wav");
+
+            fetch("/upload_audio", {
+                method: "POST",
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
+                    client.publish(topic, JSON.stringify({type: "audio", url: data.url}));
+                    displayMessage(' ', `<audio controls src="${data.url}"></audio>`);
+                } else {
+                    console.error('Gagal mengunggah audio:', data.error);
+                    alert('Gagal mengunggah audio. Silakan coba lagi.');
+                }
+            })
+            .catch(error => {
+                console.error('Error saat mengunggah audio:', error);
+                alert('Terjadi kesalahan saat mengunggah audio. Silakan coba lagi.');
+            });
+        }
     </script>
 {% endblock %}
