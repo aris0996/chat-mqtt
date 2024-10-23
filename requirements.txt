@@ -3,7 +3,8 @@ bidict==0.23.1
 blinker==1.8.2
 click==8.1.7
 colorama==0.4.6
-dnspython==2.7.0
+# Hapus atau perbarui dnspython
+dnspython==2.3.0  # Coba versi yang lebih baru
 eventlet==0.30.2
 Flask==2.2.5
 Flask-Cors==3.0.10
