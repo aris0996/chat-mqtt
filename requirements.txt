@@ -1,3 +1,4 @@
+APScheduler==3.10.4
 bidict==0.23.1
 blinker==1.8.2
 click==8.1.7
@@ -12,10 +13,16 @@ h11==0.14.0
 itsdangerous==2.2.0
 Jinja2==3.1.4
 MarkupSafe==3.0.2
+psycopg2==2.9.10
 python-engineio==4.10.1
 python-socketio==5.5.0
+pytz==2024.2
 simple-websocket==1.1.0
 six==1.16.0
+SQLAlchemy==2.0.36
+typing_extensions==4.12.2
+tzdata==2024.2
+tzlocal==5.2
 uvicorn==0.22.0
 Werkzeug==2.0.3
 wsproto==1.2.0

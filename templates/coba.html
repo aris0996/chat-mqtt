@@ -197,8 +197,9 @@
             .then(data => {
                 if (data.success) {
                     const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
-                    client.publish(topic, JSON.stringify({type: "audio", url: data.url}));
-                    displayMessage(' ', `<audio controls src="${data.url}"></audio>`);
+                    const audioUrl = window.location.origin + data.url;
+                    client.publish(topic, JSON.stringify({type: "audio", url: audioUrl}));
+                    displayMessage(' ', `<audio controls src="${audioUrl}"></audio>`);
                 } else {
                     console.error('Gagal mengunggah audio:', data.error);
                     alert('Gagal mengunggah audio. Silakan coba lagi.');
@@ -252,8 +253,9 @@
             .then(data => {
                 if (data.success) {
                     const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
-                    client.publish(topic, JSON.stringify({type: "audio", url: data.url}));
-                    displayMessage(' ', `<audio controls src="${data.url}"></audio>`);
+                    const audioUrl = window.location.origin + data.url;
+                    client.publish(topic, JSON.stringify({type: "audio", url: audioUrl}));
+                    displayMessage(' ', `<audio controls src="${audioUrl}"></audio>`);
                 } else {
                     console.error('Gagal mengunggah audio:', data.error);
                     alert('Gagal mengunggah audio. Silakan coba lagi.');
