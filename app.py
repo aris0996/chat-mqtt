@@ -137,4 +137,4 @@ def get_audio(audio_id):
         db.close()
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app)
