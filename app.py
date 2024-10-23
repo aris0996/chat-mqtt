@@ -9,10 +9,12 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from database import get_db, AudioMessage
 from apscheduler.schedulers.background import BackgroundScheduler
+import eventlet
+eventlet.monkey_patch()
 
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
 logging.getLogger('engineio').setLevel(logging.DEBUG)

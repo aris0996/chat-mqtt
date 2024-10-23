@@ -2,34 +2,15 @@
   "version": 2,
   "builds": [
     {
-      "src": "app.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "static/**",
-      "use": "@vercel/static"
+      "src": "wsgi.py",
+      "use": "@vercel/python",
+      "config": { "runtime": "python3.9" }
     }
   ],
   "routes": [
     {
-      "src": "/static/(.*)",
-      "dest": "/static/$1"
-    },
-    {
-      "src": "/favicon.ico",
-      "dest": "/static/favicon.ico"
-    },
-    {
-      "src": "/favicon.png",
-      "dest": "/static/favicon.png"
-    },
-    {
-      "src": "/socket.io/(.*)",
-      "dest": "app.py"
-    },
-    {
       "src": "/(.*)",
-      "dest": "app.py"
+      "dest": "wsgi.py"
     }
   ],
   "env": {
