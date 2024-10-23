@@ -1,0 +1,38 @@
+# File sistem operasi
+.DS_Store
+Thumbs.db
+
+# Lingkungan virtual Python
+venv/
+env/
+*.pyc
+__pycache__/
+
+# File konfigurasi IDE
+.vscode/
+.idea/
+
+# File log
+*.log
+
+# File database
+*.db
+*.sqlite3
+
+# File konfigurasi lokal
+.env
+
+# Direktori build
+build/
+dist/
+
+# Dependensi
+node_modules/
+
+# File cache
+.cache/
+
+# File temporary
+*.tmp
+*.bak
+*.swp
