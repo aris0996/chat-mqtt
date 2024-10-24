@@ -2,7 +2,6 @@
   "version": 2,
   "builds": [
     {
-<<<<<<< HEAD
       "src": "vercel-build.sh",
       "use": "@vercel/static-build",
       "config": { "distDir": "." }
@@ -14,17 +13,28 @@
     {
       "src": "static/**",
       "use": "@vercel/static"
-=======
-      "src": "wsgi.py",
-      "use": "@vercel/python",
-      "config": { "runtime": "python3.9" }
->>>>>>> c07fff3379bb13692cb9d0c2ba91a2f6cf742d63
     }
   ],
   "routes": [
     {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "/static/favicon.ico"
+    },
+    {
+      "src": "/favicon.png",
+      "dest": "/static/favicon.png"
+    },
+    {
+      "src": "/socket.io/(.*)",
+      "dest": "app.py"
+    },
+    {
       "src": "/(.*)",
-      "dest": "wsgi.py"
+      "dest": "app.py"
     }
   ],
   "env": {
