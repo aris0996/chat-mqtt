@@ -21,7 +21,6 @@
         <span class="key-icon" onclick="toggleInputId()">🔑</span>
         <label for="fileInput" class="file-label"><i class="fas fa-paperclip"></i></label>
         <input type="file" id="fileInput" accept="image/*" onchange="sendImage()">
-        <span class="mic-icon" onclick="toggleRecording()"><i class="fas fa-microphone"></i></span>
     </div>
 {% endblock %}
 
@@ -39,16 +38,7 @@
         client.on('message', (receivedTopic, message) => {
             if (receivedTopic && receivedTopic !== client.options.clientId) {
                 console.log('Received message:', receivedTopic, message.toString());
-                try {
-                    const parsedMessage = JSON.parse(message.toString());
-                    if (parsedMessage.type === "audio") {
-                        displayMessage(receivedTopic, `<audio controls src="${parsedMessage.url}"></audio>`);
-                    } else {
-                        displayMessage(receivedTopic, message.toString());
-                    }
-                } catch (e) {
-                    displayMessage(receivedTopic, message.toString());
-                }
+                displayMessage(receivedTopic, message.toString());
             }
         });
 
@@ -60,8 +50,6 @@
             transports: ['polling', 'websocket'],
             upgrade: false
         });
-        let localStream;
-        let peerConnection;
 
         function toggleInputId() {
             const inputId = document.getElementById('inputId');
@@ -93,8 +81,6 @@
                 displayMessage(' ', message);
                 console.log('Published message:', message);
                 document.getElementById('messageInput').value = '';
-                // Hapus baris berikut:
-                // saveMessageToSheet(message);
             } else {
                 alert('Pesan tidak boleh kosong!');
             }
@@ -111,8 +97,6 @@
                     client.publish(topic, base64data);
                     displayMessage(' ', base64data);
                     console.log('Published image');
-                    // Hapus baris berikut:
-                    // saveMessageToSheet(base64data);
                 };
                 reader.readAsDataURL(file);
             }
@@ -127,8 +111,6 @@
                 messageElement.classList.add('sent');
                 if (message.startsWith('data:image/')) {
                     messageElement.innerHTML = `<img src="${message}" alt="Image">`;
-                } else if (message.startsWith('<audio')) {
-                    messageElement.innerHTML = message;
                 } else {
                     messageElement.innerHTML = `${message}`;
                 }
@@ -136,8 +118,6 @@
                 messageElement.classList.add('received');
                 if (message.startsWith('data:image/')) {
                     messageElement.innerHTML = `<img src="${message}" alt="Image">`;
-                } else if (message.startsWith('<audio')) {
-                    messageElement.innerHTML = message;
                 } else {
                     messageElement.innerHTML = `${message}`;
                 }
@@ -150,65 +130,6 @@
 
             chatContainer.appendChild(messageElement);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        let mediaRecorder;
-        let audioChunks = [];
-
-        function toggleRecording() {
-            if (mediaRecorder && mediaRecorder.state === "recording") {
-                stopRecording();
-            } else {
-                startRecording();
-            }
-        }
-
-        function startRecording() {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    mediaRecorder = new MediaRecorder(stream);
-                    mediaRecorder.start();
-
-                    mediaRecorder.addEventListener("dataavailable", event => {
-                        audioChunks.push(event.data);
-                    });
-
-                    mediaRecorder.addEventListener("stop", () => {
-                        const audioBlob = new Blob(audioChunks);
-                        sendAudio(audioBlob);
-                        audioChunks = [];
-                    });
-                });
-        }
-
-        function stopRecording() {
-            mediaRecorder.stop();
-        }
-
-        function sendAudio(audioBlob) {
-            const formData = new FormData();
-            formData.append("audio", audioBlob, "recording.wav");
-
-            fetch("/upload_audio", {
-                method: "POST",
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
-                    const audioUrl = window.location.origin + data.url;
-                    client.publish(topic, JSON.stringify({type: "audio", url: audioUrl}));
-                    displayMessage(' ', `<audio controls src="${audioUrl}"></audio>`);
-                } else {
-                    console.error('Gagal mengunggah audio:', data.error);
-                    alert('Gagal mengunggah audio. Silakan coba lagi.');
-                }
-            })
-            .catch(error => {
-                console.error('Error saat mengunggah audio:', error);
-                alert('Terjadi kesalahan saat mengunggah audio. Silakan coba lagi.');
-            });
         }
     </script>
 {% endblock %}

@@ -25,10 +25,6 @@ def save_message():
     if not message:
         return jsonify({'status': 'error', 'message': 'Pesan tidak boleh kosong.'}), 400
     return jsonify({'status': 'success', 'message': message})
-<<<<<<< HEAD
-# ... existing code ...
-=======
->>>>>>> c07fff3379bb13692cb9d0c2ba91a2f6cf742d63
 
 @socketio.on('join')
 def on_join(data):
