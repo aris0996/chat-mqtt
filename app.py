@@ -16,12 +16,12 @@ logging.getLogger('engineio').setLevel(logging.DEBUG)
 def index():
     return render_template('coba.html')
 
-# ... existing code ...
+
 @app.route('/save_message', methods=['POST'])
 def save_message():
     data = request.json
     message = data.get('message')
-    # Menambahkan validasi untuk memastikan pesan tidak kosong
+    
     if not message:
         return jsonify({'status': 'error', 'message': 'Pesan tidak boleh kosong.'}), 400
     return jsonify({'status': 'success', 'message': message})
