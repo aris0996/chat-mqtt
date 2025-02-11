@@ -3,50 +3,62 @@
 {% block title %}CHAT-ROOM{% endblock %}
 
 {% block header %}
-<div class="header-container">
-    <h1>CHAT-ROOM</h1>
+<div class="hero is-primary">
+    <div class="hero-body">
+        <h1 class="title has-text-centered">CHAT-ROOM</h1>
+    </div>
 </div>
 {% endblock %}
 
 {% block content %}
-<div class="columns">
-    <div class="column is-3">
-        <!-- User List -->
-        <div class="box">
-            <h3 class="title is-5">Online Users</h3>
-            <div class="menu">
-                <ul class="menu-list" id="userList">
-                    <!-- Users will be added here dynamically -->
-                </ul>
-            </div>
-        </div>
-    </div>
-    
-    <div class="column is-9">
-        <!-- Chat Area -->
-        <div class="box">
-            <div id="messages" class="messages" style="height: 400px; overflow-y: auto; margin-bottom: 1rem;">
-                <!-- Messages will appear here -->
-            </div>
-            
-            <div class="field has-addons">
-                <div class="control is-expanded">
-                    <input class="input" type="text" id="message" placeholder="Type your message...">
-                </div>
+<div class="section">
+    <div class="container">
+        <div class="box chat-container" id="chat-container"></div>
+        
+        <div class="box input-id-container" id="inputId" style="display: none;">
+            <div class="field">
                 <div class="control">
-                    <button class="button is-primary" onclick="sendMessage()">
-                        <span class="icon">
-                            <i class="fas fa-paper-plane"></i>
-                        </span>
-                        <span>Send</span>
-                    </button>
+                    <input class="input" type="text" id="subscribeTopicInput" placeholder="Masukkan ID Anda">
                 </div>
+            </div>
+            <div class="field">
+                <div class="control">
+                    <input class="input" type="text" id="topicInput" placeholder="Masukkan Tujuan">
+                </div>
+            </div>
+            <button class="button is-primary" onclick="subscribeTopic()">OK</button>
+        </div>
+
+        <div class="field has-addons input-container">
+            <div class="control is-expanded">
+                <input class="input" type="text" id="messageInput" placeholder="Masukkan Pesan">
+            </div>
+            <div class="control">
+                <button class="button is-info" onclick="sendMessage()">
+                    <span class="icon">
+                        <i class="fas fa-paper-plane"></i>
+                    </span>
+                </button>
+            </div>
+            <div class="control">
+                <button class="button is-warning" onclick="toggleInputId()">
+                    <span class="icon">
+                        <i class="fas fa-key"></i>
+                    </span>
+                </button>
+            </div>
+            <div class="control">
+                <label for="fileInput" class="button is-primary">
+                    <span class="icon">
+                        <i class="fas fa-paperclip"></i>
+                    </span>
+                </label>
+                <input type="file" id="fileInput" accept="image/*" onchange="sendImage()" style="display: none;">
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-
 
 {% block extra_js %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
