@@ -212,42 +212,35 @@ input[type="file"] {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    padding: 10px 20px;
 }
 
-h1 {
-    margin: 0;
-    flex-grow: 1;
-    text-align: left;
-}
-
-.call-container {
+.nav-menu {
     display: flex;
-    gap: 10px;
+    gap: 15px;
+    align-items: center;
 }
 
-#startCall, #endCall {
+.nav-link {
+    text-decoration: none;
+    color: #333;
     padding: 8px 15px;
-    font-size: 14px;
-    background-color: #003300;
-    color: #00ff00;
-    border: 1px solid #00ff00;
-    cursor: pointer;
     border-radius: 5px;
-    outline: none;
-    transition: background-color 0.3s ease;
+    background-color: #f0f0f0;
+    transition: background-color 0.3s;
 }
 
-#startCall:hover, #endCall:hover {
-    background-color: #004d00;
+.nav-link:hover {
+    background-color: #e0e0e0;
 }
 
-#endCall {
-    background-color: #330000;
-    border-color: #ff0000;
-    color: #ff0000;
+#logoutBtn {
+    border: none;
+    cursor: pointer;
+    font-size: 1em;
 }
 
-#endCall:hover {
-    background-color: #4d0000;
+#logoutBtn:hover {
+    background-color: #ff6b6b;
+    color: white;
 }

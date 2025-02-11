@@ -5,6 +5,11 @@
 {% block header %}
 <div class="header-container">
     <h1>Global Chat Room</h1>
+    <nav class="nav-menu">
+        <a href="/" class="nav-link">Global Chat</a>
+        <a href="/coba" class="nav-link">Private Chat</a>
+        <button id="logoutBtn" onclick="handleLogout()" style="display: none;" class="nav-link">Keluar Room</button>
+    </nav>
 </div>
 {% endblock %}
 
@@ -62,6 +67,7 @@
                 currentUsername = data.username;
                 document.getElementById('login-container').style.display = 'none';
                 document.getElementById('chat-section').style.display = 'block';
+                document.getElementById('logoutBtn').style.display = 'inline-block';
                 loadMessages();
             } else {
                 alert(data.message);
@@ -141,5 +147,15 @@
             sendMessage();
         }
     });
+
+    function handleLogout() {
+        currentUsername = '';
+        document.getElementById('login-container').style.display = 'block';
+        document.getElementById('chat-section').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'none';
+        document.getElementById('chat-container').innerHTML = '';
+        document.getElementById('usernameInput').value = '';
+        socket.emit('leave', { username: currentUsername, room: 'global' });
+    }
 </script>
 {% endblock %}
