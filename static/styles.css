@@ -212,35 +212,42 @@ input[type="file"] {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 20px;
+    margin-bottom: 20px;
 }
 
-.nav-menu {
+h1 {
+    margin: 0;
+    flex-grow: 1;
+    text-align: left;
+}
+
+.call-container {
     display: flex;
-    gap: 15px;
-    align-items: center;
+    gap: 10px;
 }
 
-.nav-link {
-    text-decoration: none;
-    color: #333;
+#startCall, #endCall {
     padding: 8px 15px;
-    border-radius: 5px;
-    background-color: #f0f0f0;
-    transition: background-color 0.3s;
-}
-
-.nav-link:hover {
-    background-color: #e0e0e0;
-}
-
-#logoutBtn {
-    border: none;
+    font-size: 14px;
+    background-color: #003300;
+    color: #00ff00;
+    border: 1px solid #00ff00;
     cursor: pointer;
-    font-size: 1em;
+    border-radius: 5px;
+    outline: none;
+    transition: background-color 0.3s ease;
 }
 
-#logoutBtn:hover {
-    background-color: #ff6b6b;
-    color: white;
+#startCall:hover, #endCall:hover {
+    background-color: #004d00;
+}
+
+#endCall {
+    background-color: #330000;
+    border-color: #ff0000;
+    color: #ff0000;
+}
+
+#endCall:hover {
+    background-color: #4d0000;
 }
