@@ -9,20 +9,44 @@
 {% endblock %}
 
 {% block content %}
-    <div class="chat-container" id="chat-container"></div>
-    <div class="input-id-container" id="inputId" style="display: none;">
-        <input type="text" id="subscribeTopicInput" placeholder="Masukkan ID Anda">
-        <input type="text" id="topicInput" placeholder="Masukkan Tujuan">
-        <button class="button-ok" onclick="subscribeTopic()">OK</button>
+<div class="columns">
+    <div class="column is-3">
+        <!-- User List -->
+        <div class="box">
+            <h3 class="title is-5">Online Users</h3>
+            <div class="menu">
+                <ul class="menu-list" id="userList">
+                    <!-- Users will be added here dynamically -->
+                </ul>
+            </div>
+        </div>
     </div>
-    <div class="input-container">
-        <input type="text" id="messageInput" placeholder="Masukkan Pesan">
-        <span class="send-icon" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></span>
-        <span class="key-icon" onclick="toggleInputId()">🔑</span>
-        <label for="fileInput" class="file-label"><i class="fas fa-paperclip"></i></label>
-        <input type="file" id="fileInput" accept="image/*" onchange="sendImage()">
+    
+    <div class="column is-9">
+        <!-- Chat Area -->
+        <div class="box">
+            <div id="messages" class="messages" style="height: 400px; overflow-y: auto; margin-bottom: 1rem;">
+                <!-- Messages will appear here -->
+            </div>
+            
+            <div class="field has-addons">
+                <div class="control is-expanded">
+                    <input class="input" type="text" id="message" placeholder="Type your message...">
+                </div>
+                <div class="control">
+                    <button class="button is-primary" onclick="sendMessage()">
+                        <span class="icon">
+                            <i class="fas fa-paper-plane"></i>
+                        </span>
+                        <span>Send</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
+</div>
 {% endblock %}
+
 
 {% block extra_js %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
