@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Global Chat Room{% endblock %}
+
+{% block content %}
+<!-- Login Modal -->
+<div class="modal" id="loginModal">
+    <div class="modal-content">
+        <h2>Selamat Datang di Global Chat</h2>
+        <div class="modal-input-group">
+            <input type="text" id="usernameInput" placeholder="Masukkan username Anda">
+            <i class="fas fa-user"></i>
+        </div>
+        <button class="modal-button" onclick="joinGlobalChat()">
+            <i class="fas fa-sign-in-alt"></i>
+            Masuk ke Chat
+        </button>
+    </div>
+</div>
+
+<!-- Chat Container -->
+<div class="global-chat-container" style="display: none;">
+    <!-- Update bagian header global chat -->
+    <div class="chat-header-container">
+        <div class="chat-header">
+            <div class="header-left">
+                <a href="/" class="back-button">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <div class="header-info">
+                    <h3>Global Chat Room</h3>
+                    <span class="online-users">
+                        <i class="fas fa-circle online-indicator"></i>
+                        <span id="onlineCount">0</span> Pengguna Online
+                    </span>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="header-icon">
+                    <i class="fas fa-users"></i>
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="chat-container" id="globalChatContainer" style="background-color: #f9f9f9; border-radius: 10px; padding: 10px; max-height: 400px; overflow-y: auto;"></div>
+    
+    <!-- Tambahkan context menu -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="replyToMessage()">
+            <i class="fas fa-reply"></i> Balas
+        </div>
+    </div>
+
+    <!-- Update input container dengan reply preview -->
+    <div class="input-container">
+        <div id="replyPreview" style="display: none;" class="reply-container">
+            <span class="reply-close" onclick="cancelReply()">×</span>
+            <div class="reply-text" id="replyText"></div>
+        </div>
+        <input type="text" id="messageInput" placeholder="Ketik pesan..." onkeypress="checkEnter(event)">
+        <label for="fileInput" class="file-label">
+            <i class="fas fa-paperclip"></i>
+        </label>
+        <input type="file" id="fileInput" accept="image/*" onchange="sendImage()" style="display: none;">
+        <span class="send-icon" onclick="sendGlobalMessage()">
+            <i class="fas fa-paper-plane"></i>
+        </span>
+    </div>
+</div>
+
+<!-- Image Preview Modal -->
+<div class="image-preview-modal" id="imagePreviewModal">
+    <div class="image-preview-content">
+        <span class="preview-close" onclick="closeImagePreview()">
+            <i class="fas fa-times"></i>
+        </span>
+        <img id="previewImage" class="preview-image" src="" alt="Preview">
+        <div class="image-preview-actions">
+            <button class="preview-button" onclick="downloadImage()">
+                <i class="fas fa-download"></i>
+                Unduh Gambar
+            </button>
+            <button class="preview-button" onclick="closeImagePreview()">
+                <i class="fas fa-times"></i>
+                Tutup
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+let currentUsername = '';
+const socket = io();
+let selectedMessageId = null;
+let replyingTo = null;
+
+// Show login modal on page load
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('loginModal').style.display = 'block';
+});
+
+function joinGlobalChat() {
+    const username = document.getElementById('usernameInput').value.trim();
+    if (username) {
+        currentUsername = username;
+        document.getElementById('loginModal').style.display = 'none';
+        document.querySelector('.global-chat-container').style.display = 'block';
+        
+        // Emit join event to server
+        socket.emit('join_global', { username: username });
+    } else {
+        alert('Username tidak boleh kosong!');
+    }
+}
+
+function sendGlobalMessage() {
+    const message = document.getElementById('messageInput').value.trim();
+    if (message) {
+        const messageData = {
+            message: message,
+            type: 'text',
+            replyTo: selectedMessageId
+        };
+        if (replyingTo) {
+            messageData.replyToText = replyingTo;
+        }
+        socket.emit('global_message', messageData);
+        document.getElementById('messageInput').value = '';
+        cancelReply();
+    }
+}
+
+function sendImage() {
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64data = reader.result;
+            socket.emit('global_message', {
+                message: base64data,
+                type: 'image'
+            });
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function displayMessage(data) {
+    const chatContainer = document.getElementById('globalChatContainer');
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message');
+    
+    // Jika pesan sistem, tampilkan berbeda
+    if (data.type === 'system') {
+        messageElement.classList.add('system');
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('message-content');
+        contentDiv.textContent = data.message;
+        messageElement.appendChild(contentDiv);
+        chatContainer.appendChild(messageElement);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return;
+    }
+    
+    // Generate unique ID untuk pesan
+    const messageId = 'msg_' + Date.now();
+    messageElement.id = messageId;
+
+    // Event listeners untuk context menu (hanya untuk pesan non-sistem)
+    messageElement.addEventListener('contextmenu', (e) => {
+        showContextMenu(e, messageId, data.message);
+    });
+
+    // Event listener untuk long press
+    let pressTimer;
+    messageElement.addEventListener('touchstart', () => {
+        pressTimer = setTimeout(() => {
+            showContextMenu(event, messageId, data.message);
+        }, 500);
+    });
+    messageElement.addEventListener('touchend', () => {
+        clearTimeout(pressTimer);
+    });
+
+    // Pesan normal (teks atau gambar)
+    messageElement.classList.add(data.username === currentUsername ? 'sent' : 'received');
+
+    // Header dengan username dan timestamp
+    const headerDiv = document.createElement('div');
+    headerDiv.classList.add('message-header');
+    
+    const username = document.createElement('span');
+    username.classList.add('username');
+    username.textContent = data.username;
+    
+    const timestamp = document.createElement('span');
+    timestamp.classList.add('timestamp');
+    timestamp.textContent = new Date().toLocaleTimeString();
+    
+    headerDiv.appendChild(username);
+    headerDiv.appendChild(timestamp);
+    messageElement.appendChild(headerDiv);
+
+    // Tambahkan reply preview jika ada
+    if (data.replyToText) {
+        const replyDiv = document.createElement('div');
+        replyDiv.classList.add('message-reply-preview');
+        
+        const replyIcon = document.createElement('i');
+        replyIcon.className = 'fas fa-reply';
+        replyDiv.appendChild(replyIcon);
+        
+        const replyText = document.createElement('span');
+        replyText.textContent = data.replyToText;
+        replyDiv.appendChild(replyText);
+        
+        messageElement.appendChild(replyDiv);
+    }
+
+    // Content
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('message-content');
+    
+    if (data.type === 'image') {
+        const imageContainer = document.createElement('div');
+        imageContainer.classList.add('message-image-container');
+        
+        const img = document.createElement('img');
+        img.src = data.message;
+        img.classList.add('message-thumbnail');
+        img.onclick = () => showImagePreview(data.message);
+        
+        imageContainer.appendChild(img);
+        contentDiv.appendChild(imageContainer);
+    } else {
+        contentDiv.textContent = data.message;
+    }
+
+    messageElement.appendChild(contentDiv);
+    chatContainer.appendChild(messageElement);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function showImagePreview(src) {
+    const modal = document.getElementById('imagePreviewModal');
+    const previewImage = document.getElementById('previewImage');
+    previewImage.src = src;
+    modal.style.display = 'block';
+}
+
+function closeImagePreview() {
+    document.getElementById('imagePreviewModal').style.display = 'none';
+}
+
+function downloadImage() {
+    const image = document.getElementById('previewImage');
+    const link = document.createElement('a');
+    link.href = image.src;
+    link.download = 'global-chat-image-' + new Date().getTime() + '.jpg';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function checkEnter(event) {
+    if (event.key === 'Enter') {
+        sendGlobalMessage();
+    }
+}
+
+// Tambahkan event listener untuk context menu
+document.addEventListener('click', () => {
+    document.getElementById('contextMenu').style.display = 'none';
+});
+
+function showContextMenu(event, messageId, messageText) {
+    event.preventDefault();
+    const contextMenu = document.getElementById('contextMenu');
+    contextMenu.style.display = 'block';
+    contextMenu.style.left = `${event.pageX}px`;
+    contextMenu.style.top = `${event.pageY}px`;
+    selectedMessageId = messageId;
+    replyingTo = messageText;
+}
+
+function replyToMessage() {
+    if (selectedMessageId && replyingTo) {
+        const replyPreview = document.getElementById('replyPreview');
+        const replyText = document.getElementById('replyText');
+        replyPreview.style.display = 'block';
+        replyText.textContent = replyingTo;
+        document.getElementById('messageInput').focus();
+    }
+    document.getElementById('contextMenu').style.display = 'none';
+}
+
+function cancelReply() {
+    document.getElementById('replyPreview').style.display = 'none';
+    selectedMessageId = null;
+    replyingTo = null;
+}
+
+// Socket event listeners
+socket.on('connect', () => {
+    console.log('Connected to server');
+});
+
+socket.on('global_message', (data) => {
+    displayMessage(data);
+});
+
+socket.on('user_count', (count) => {
+    document.getElementById('onlineCount').textContent = count;
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+});
+</script>
+{% endblock %}

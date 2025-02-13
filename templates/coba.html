@@ -17,22 +17,72 @@
 {% block content %}
 <div class="chat-container" id="chat-container"></div>
 
-<div class="input-id-container" id="inputId">
-    <input type="text" id="subscribeTopicInput" placeholder="Enter Your ID">
-    <input type="text" id="topicInput" placeholder="Enter Destination">
-    <button class="button-ok" onclick="subscribeTopic()">OK</button>
+<!-- Pop-up untuk pengaturan ID dan tujuan -->
+<div class="modal" id="settingsModal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal()">
+            <i class="fas fa-times"></i>
+        </span>
+        <h2>Pengaturan Chat</h2>
+        
+        <div class="modal-input-group">
+            <input type="text" id="subscribeTopicInput" placeholder="Masukkan ID Anda">
+            <i class="fas fa-user"></i>
+        </div>
+        
+        <div class="modal-input-group">
+            <input type="text" id="topicInput" placeholder="Masukkan ID Tujuan">
+            <i class="fas fa-user-friends"></i>
+        </div>
+        
+        <button class="modal-button" onclick="subscribeTopic()">
+            <i class="fas fa-check-circle"></i>
+            Mulai Chat
+        </button>
+    </div>
 </div>
 
+<!-- Tambahkan context menu -->
+<div class="context-menu" id="contextMenu">
+    <div class="context-menu-item" onclick="replyToMessage()">
+        <i class="fas fa-reply"></i> Balas
+    </div>
+</div>
+
+<!-- Update input container dengan reply preview -->
 <div class="input-container">
-    <input type="text" id="messageInput" placeholder="Enter Message" onkeypress="checkEnter(event)">
-    <span class="send-icon" onclick="sendMessage()">
-        <i class="fas fa-paper-plane"></i>
-    </span>
-    <span class="key-icon" onclick="toggleInputId()">🔑</span>
+    <div id="replyPreview" style="display: none;" class="reply-container">
+        <span class="reply-close" onclick="cancelReply()">×</span>
+        <div class="reply-text" id="replyText"></div>
+    </div>
+    <input type="text" id="messageInput" placeholder="Ketik pesan..." onkeypress="checkEnter(event)">
     <label for="fileInput" class="file-label">
         <i class="fas fa-paperclip"></i>
     </label>
-    <input type="file" id="fileInput" accept="image/*" capture="camera" onchange="sendImage()">
+    <input type="file" id="fileInput" accept="image/*" onchange="sendImage()" style="display: none;">
+    <span class="send-icon" onclick="sendMessage()">
+        <i class="fas fa-paper-plane"></i>
+    </span>
+</div>
+
+<!-- Tambahkan modal preview gambar ke dalam template -->
+<div class="image-preview-modal" id="imagePreviewModal">
+    <div class="image-preview-content">
+        <span class="preview-close" onclick="closeImagePreview()">
+            <i class="fas fa-times"></i>
+        </span>
+        <img id="previewImage" class="preview-image" src="" alt="Preview">
+        <div class="image-preview-actions">
+            <button class="preview-button" onclick="downloadImage()">
+                <i class="fas fa-download"></i>
+                Unduh Gambar
+            </button>
+            <button class="preview-button" onclick="closeImagePreview()">
+                <i class="fas fa-times"></i>
+                Tutup
+            </button>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -63,9 +113,20 @@
         upgrade: false
     });
 
-    function toggleInputId() {
-        const inputId = document.getElementById('inputId');
-        inputId.style.display = inputId.style.display === 'none' ? 'flex' : 'none';
+    function toggleModal() {
+        const modal = document.getElementById('settingsModal');
+        modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('settingsModal');
+        modal.style.display = 'none';
+    }
+
+    function checkEnter(event) {
+        if (event.key === 'Enter') {
+            sendMessage(); // Panggil fungsi kirim pesan
+        }
     }
 
     function subscribeTopic() {
@@ -74,7 +135,7 @@
             client.subscribe(subscribeTopic, (err) => {
                 if (!err) {
                     displayMessage('', `ID kamu terdaftar: ${subscribeTopic}`);
-                    toggleInputId();
+                    toggleModal();
                 } else {
                     console.error('Subscription error:', err);
                     alert('Failed to subscribe to topic');
@@ -121,27 +182,60 @@
 
         if (topic === ' ' || topic === '  ') {
             messageElement.classList.add('sent');
-            if (message.startsWith('data:image/')) {
-                messageElement.innerHTML = `<img src="${message}" alt="Image">`;
-            } else {
-                messageElement.innerHTML = `${message}`;
-            }
         } else {
             messageElement.classList.add('received');
-            if (message.startsWith('data:image/')) {
-                messageElement.innerHTML = `<img src="${message}" alt="Image">`;
-            } else {
-                messageElement.innerHTML = `${message}`;
-            }
+        }
+
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('message-content');
+
+        if (message.startsWith('data:image/')) {
+            const imageContainer = document.createElement('div');
+            imageContainer.classList.add('message-image-container');
+            
+            const img = document.createElement('img');
+            img.src = message;
+            img.classList.add('message-thumbnail');
+            img.onclick = () => showImagePreview(message);
+            
+            imageContainer.appendChild(img);
+            contentDiv.appendChild(imageContainer);
+        } else {
+            contentDiv.textContent = message;
         }
 
         const timestamp = document.createElement('span');
         timestamp.classList.add('timestamp');
         timestamp.textContent = new Date().toLocaleTimeString();
+        
+        messageElement.appendChild(contentDiv);
         messageElement.appendChild(timestamp);
-
         chatContainer.appendChild(messageElement);
         chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Fungsi untuk menampilkan preview gambar
+    function showImagePreview(src) {
+        const modal = document.getElementById('imagePreviewModal');
+        const previewImage = document.getElementById('previewImage');
+        previewImage.src = src;
+        modal.style.display = 'block';
+    }
+
+    // Fungsi untuk menutup preview gambar
+    function closeImagePreview() {
+        document.getElementById('imagePreviewModal').style.display = 'none';
+    }
+
+    // Fungsi untuk mengunduh gambar
+    function downloadImage() {
+        const image = document.getElementById('previewImage');
+        const link = document.createElement('a');
+        link.href = image.src;
+        link.download = 'chat-image-' + new Date().getTime() + '.jpg';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 </script>
 {% endblock %}
