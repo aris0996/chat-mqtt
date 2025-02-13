@@ -1,171 +1,147 @@
 {% extends "base.html" %}
 
-{% block title %}CHAT-ROOM{% endblock %}
+{% block title %}ARS CHAT ROOM{% endblock %}
 
 {% block header %}
-<div class="hero is-primary">
-    <div class="hero-body">
-        <h1 class="title has-text-centered">CHAT-ROOM</h1>
-    </div>
-</div>
+<h1>
+    ARS CHAT ROOM
+    <a href="https://instagram.com/ars_0996" target="_blank" class="instagram-icon">
+        <i class="fab fa-instagram"></i>
+    </a>
+    <a class='global-btn' href='/global' target='_self'>
+        <i class="fas fa-globe"></i> Global
+    </a>
+</h1>
 {% endblock %}
 
 {% block content %}
-<div class="section">
-    <div class="container">
-        <div class="box chat-container" id="chat-container"></div>
-        
-        <div class="box input-id-container" id="inputId" style="display: none;">
-            <div class="field">
-                <div class="control">
-                    <input class="input" type="text" id="subscribeTopicInput" placeholder="Masukkan ID Anda">
-                </div>
-            </div>
-            <div class="field">
-                <div class="control">
-                    <input class="input" type="text" id="topicInput" placeholder="Masukkan Tujuan">
-                </div>
-            </div>
-            <button class="button is-primary" onclick="subscribeTopic()">OK</button>
-        </div>
+<div class="chat-container" id="chat-container"></div>
 
-        <div class="field has-addons input-container">
-            <div class="control is-expanded">
-                <input class="input" type="text" id="messageInput" placeholder="Masukkan Pesan">
-            </div>
-            <div class="control">
-                <button class="button is-info" onclick="sendMessage()">
-                    <span class="icon">
-                        <i class="fas fa-paper-plane"></i>
-                    </span>
-                </button>
-            </div>
-            <div class="control">
-                <button class="button is-warning" onclick="toggleInputId()">
-                    <span class="icon">
-                        <i class="fas fa-key"></i>
-                    </span>
-                </button>
-            </div>
-            <div class="control">
-                <label for="fileInput" class="button is-primary">
-                    <span class="icon">
-                        <i class="fas fa-paperclip"></i>
-                    </span>
-                </label>
-                <input type="file" id="fileInput" accept="image/*" onchange="sendImage()" style="display: none;">
-            </div>
-        </div>
-    </div>
+<div class="input-id-container" id="inputId">
+    <input type="text" id="subscribeTopicInput" placeholder="Enter Your ID">
+    <input type="text" id="topicInput" placeholder="Enter Destination">
+    <button class="button-ok" onclick="subscribeTopic()">OK</button>
+</div>
+
+<div class="input-container">
+    <input type="text" id="messageInput" placeholder="Enter Message" onkeypress="checkEnter(event)">
+    <span class="send-icon" onclick="sendMessage()">
+        <i class="fas fa-paper-plane"></i>
+    </span>
+    <span class="key-icon" onclick="toggleInputId()">🔑</span>
+    <label for="fileInput" class="file-label">
+        <i class="fas fa-paperclip"></i>
+    </label>
+    <input type="file" id="fileInput" accept="image/*" capture="camera" onchange="sendImage()">
 </div>
 {% endblock %}
 
 {% block extra_js %}
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-    <script>
-        const broker = 'wss://broker.emqx.io:8084/mqtt';
-        const client = mqtt.connect(broker);
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>
+    const broker = 'wss://broker.emqx.io:8084/mqtt';
+    const client = mqtt.connect(broker);
 
-        client.on('connect', () => {
-            console.log('Connected to MQTT broker');
-        });
+    client.on('connect', () => {
+        console.log('Connected to MQTT broker');
+    });
 
-        client.on('message', (receivedTopic, message) => {
-            if (receivedTopic && receivedTopic !== client.options.clientId) {
-                console.log('Received message:', receivedTopic, message.toString());
-                displayMessage(receivedTopic, message.toString());
-            }
-        });
-
-        client.on('error', (error) => {
-            console.error('Connection error:', error);
-        });
-
-        const socket = io({
-            transports: ['polling', 'websocket'],
-            upgrade: false
-        });
-
-        function toggleInputId() {
-            const inputId = document.getElementById('inputId');
-            inputId.style.display = inputId.style.display === 'none' ? 'flex' : 'none';
+    client.on('message', (receivedTopic, message) => {
+        if (receivedTopic && receivedTopic !== client.options.clientId) {
+            console.log('Received message:', receivedTopic, message.toString());
+            displayMessage(receivedTopic, message.toString());
         }
+    });
 
-        function subscribeTopic() {
-            const subscribeTopic = document.getElementById('subscribeTopicInput').value.trim();
-            if (subscribeTopic) {
-                client.subscribe(subscribeTopic, (err) => {
-                    if (!err) {
-                        displayMessage('', `ID kamu terdaftar: ${subscribeTopic}`);
-                        toggleInputId();
-                    } else {
-                        console.error('Subscription error:', err);
-                        alert('Failed to subscribe to topic');
-                    }
-                });
-            } else {
-                alert('ID cannot be empty!');
-            }
-        }
+    client.on('error', (error) => {
+        console.error('Connection error:', error);
+    });
 
-        function sendMessage() {
-            const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
-            const message = document.getElementById('messageInput').value.trim();
-            if (message) {
-                client.publish(topic, message);
-                displayMessage(' ', message);
-                console.log('Published message:', message);
-                document.getElementById('messageInput').value = '';
-            } else {
-                alert('Pesan tidak boleh kosong!');
-            }
-        }
+    const socket = io({
+        transports: ['polling', 'websocket'],
+        upgrade: false
+    });
 
-        function sendImage() {
-            const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64data = reader.result;
-                    client.publish(topic, base64data);
-                    displayMessage(' ', base64data);
-                    console.log('Published image');
-                };
-                reader.readAsDataURL(file);
-            }
-        }
+    function toggleInputId() {
+        const inputId = document.getElementById('inputId');
+        inputId.style.display = inputId.style.display === 'none' ? 'flex' : 'none';
+    }
 
-        function displayMessage(topic, message) {
-            const chatContainer = document.getElementById('chat-container');
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('message');
-
-            if (topic === ' ' || topic === '  ') {
-                messageElement.classList.add('sent');
-                if (message.startsWith('data:image/')) {
-                    messageElement.innerHTML = `<img src="${message}" alt="Image">`;
+    function subscribeTopic() {
+        const subscribeTopic = document.getElementById('subscribeTopicInput').value.trim();
+        if (subscribeTopic) {
+            client.subscribe(subscribeTopic, (err) => {
+                if (!err) {
+                    displayMessage('', `ID kamu terdaftar: ${subscribeTopic}`);
+                    toggleInputId();
                 } else {
-                    messageElement.innerHTML = `${message}`;
+                    console.error('Subscription error:', err);
+                    alert('Failed to subscribe to topic');
                 }
-            } else {
-                messageElement.classList.add('received');
-                if (message.startsWith('data:image/')) {
-                    messageElement.innerHTML = `<img src="${message}" alt="Image">`;
-                } else {
-                    messageElement.innerHTML = `${message}`;
-                }
-            }
-
-            const timestamp = document.createElement('span');
-            timestamp.classList.add('timestamp');
-            timestamp.textContent = new Date().toLocaleTimeString();
-            messageElement.appendChild(timestamp);
-
-            chatContainer.appendChild(messageElement);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            });
+        } else {
+            alert('ID cannot be empty!');
         }
-    </script>
+    }
+
+    function sendMessage() {
+        const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
+        const message = document.getElementById('messageInput').value.trim();
+        if (message) {
+            client.publish(topic, message);
+            displayMessage(' ', message);
+            console.log('Published message:', message);
+            document.getElementById('messageInput').value = '';
+        } else {
+            alert('Pesan tidak boleh kosong!');
+        }
+    }
+
+    function sendImage() {
+        const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64data = reader.result;
+                client.publish(topic, base64data);
+                displayMessage(' ', base64data);
+                console.log('Published image');
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function displayMessage(topic, message) {
+        const chatContainer = document.getElementById('chat-container');
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message');
+
+        if (topic === ' ' || topic === '  ') {
+            messageElement.classList.add('sent');
+            if (message.startsWith('data:image/')) {
+                messageElement.innerHTML = `<img src="${message}" alt="Image">`;
+            } else {
+                messageElement.innerHTML = `${message}`;
+            }
+        } else {
+            messageElement.classList.add('received');
+            if (message.startsWith('data:image/')) {
+                messageElement.innerHTML = `<img src="${message}" alt="Image">`;
+            } else {
+                messageElement.innerHTML = `${message}`;
+            }
+        }
+
+        const timestamp = document.createElement('span');
+        timestamp.classList.add('timestamp');
+        timestamp.textContent = new Date().toLocaleTimeString();
+        messageElement.appendChild(timestamp);
+
+        chatContainer.appendChild(messageElement);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+</script>
 {% endblock %}
