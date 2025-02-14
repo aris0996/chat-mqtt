@@ -90,89 +90,56 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
 let currentUsername = '';
 let selectedMessageId = null;
 let replyingTo = null;
 let selectedMessageType = null;
 
-// Update konfigurasi socket
-const socket = io({
-    transports: ['polling'], // Gunakan polling saja dulu
-    upgrade: false, // Nonaktifkan upgrade ke websocket
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 20000,
-    autoConnect: true,
-    path: '/socket.io/',
-    withCredentials: true,
-    forceNew: true
-});
+// Konfigurasi MQTT
+const broker = 'wss://broker.emqx.io:8084/mqtt';
+const client = mqtt.connect(broker);
+const globalTopic = 'global_chat'; // Topic untuk global chat
 
-// Tambahkan retry logic
-let retryCount = 0;
-const maxRetries = 5;
-
-function connectWithRetry() {
-    if (retryCount < maxRetries) {
-        console.log(`Attempting to reconnect (${retryCount + 1}/${maxRetries})...`);
-        socket.connect();
-        retryCount++;
-    } else {
-        console.error('Max reconnection attempts reached');
-        alert('Gagal terhubung ke server. Silakan refresh halaman.');
-    }
-}
-
-// Update socket event handlers
-socket.on('connect', () => {
-    console.log('Connected to server with ID:', socket.id);
-    retryCount = 0; // Reset retry counter on successful connection
-});
-
-socket.on('connect_error', (error) => {
-    console.error('Connection error:', error);
-    connectWithRetry();
-});
-
-socket.on('disconnect', (reason) => {
-    console.log('Disconnected:', reason);
-    if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'transport error') {
-        connectWithRetry();
-    }
-});
-
-// Tambahkan fungsi untuk safe emit
-function safeEmit(eventName, data) {
-    try {
-        if (socket.connected) {
-            socket.emit(eventName, data);
-        } else {
-            console.warn('Socket not connected, attempting to reconnect...');
-            socket.connect();
-            setTimeout(() => socket.emit(eventName, data), 1000);
+// MQTT connection handlers
+client.on('connect', () => {
+    console.log('Connected to MQTT broker');
+    client.subscribe(globalTopic, (err) => {
+        if (!err) {
+            console.log('Subscribed to global chat');
         }
-    } catch (error) {
-        console.error('Error emitting event:', error);
-    }
-}
-
-// Tampilkan login modal saat halaman dimuat
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('loginModal').style.display = 'block';
+    });
 });
 
-// Update fungsi yang menggunakan emit
+client.on('message', (topic, message) => {
+    try {
+        const data = JSON.parse(message.toString());
+        displayMessage(data);
+    } catch (e) {
+        console.error('Error parsing message:', e);
+    }
+});
+
+client.on('error', (error) => {
+    console.error('MQTT error:', error);
+});
+
+// Update fungsi untuk menggunakan MQTT
 function joinGlobalChat() {
     const username = document.getElementById('usernameInput').value.trim();
     if (username) {
         currentUsername = username;
         document.getElementById('loginModal').style.display = 'none';
         document.querySelector('.global-chat-container').style.display = 'block';
-        safeEmit('join_global', { username: username });
+        
+        // Kirim pesan join
+        const joinMessage = {
+            type: 'system',
+            username: username,
+            message: `👋 ${username} bergabung ke chat`
+        };
+        client.publish(globalTopic, JSON.stringify(joinMessage));
     } else {
         alert('Username tidak boleh kosong!');
     }
@@ -180,15 +147,17 @@ function joinGlobalChat() {
 
 function sendGlobalMessage() {
     const message = document.getElementById('messageInput').value.trim();
-    if (message) {
+    if (message && currentUsername) {
         const messageData = {
+            username: currentUsername,
             message: message,
             type: 'text',
             replyTo: selectedMessageId,
             replyType: selectedMessageType,
-            replyToText: replyingTo
+            replyToText: replyingTo,
+            timestamp: new Date().toISOString()
         };
-        safeEmit('global_message', messageData);
+        client.publish(globalTopic, JSON.stringify(messageData));
         document.getElementById('messageInput').value = '';
         cancelReply();
     }
@@ -197,23 +166,38 @@ function sendGlobalMessage() {
 function sendImage() {
     const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
-    if (file) {
+    if (file && currentUsername) {
         const reader = new FileReader();
         reader.onloadend = () => {
             const base64data = reader.result;
             const messageData = {
+                username: currentUsername,
                 message: base64data,
                 type: 'image',
                 replyTo: selectedMessageId,
                 replyType: selectedMessageType,
-                replyToText: replyingTo
+                replyToText: replyingTo,
+                timestamp: new Date().toISOString()
             };
-            safeEmit('global_message', messageData);
+            client.publish(globalTopic, JSON.stringify(messageData));
             cancelReply();
         };
         reader.readAsDataURL(file);
     }
 }
+
+// Tambahkan event listener untuk disconnect
+window.addEventListener('beforeunload', () => {
+    if (currentUsername) {
+        const leaveMessage = {
+            type: 'system',
+            username: currentUsername,
+            message: `👋 ${currentUsername} meninggalkan chat`
+        };
+        client.publish(globalTopic, JSON.stringify(leaveMessage));
+        client.end();
+    }
+});
 
 function displayMessage(data) {
     const chatContainer = document.getElementById('globalChatContainer');
