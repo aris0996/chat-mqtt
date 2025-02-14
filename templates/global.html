@@ -95,7 +95,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
 let currentUsername = '';
-const socket = io();
+const socket = io({
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    timeout: 60000,
+    autoConnect: true,
+    forceNew: true
+});
 let selectedMessageId = null;
 let replyingTo = null;
 
@@ -321,6 +329,21 @@ socket.on('user_count', (count) => {
 
 socket.on('connect_error', (error) => {
     console.error('Connection error:', error);
+});
+
+socket.on('error', (error) => {
+    console.error('Socket error:', error);
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('Disconnected:', reason);
+    if (reason === 'io server disconnect') {
+        socket.connect(); // Reconnect jika server memutuskan koneksi
+    }
+});
+
+socket.on('connect_response', (data) => {
+    console.log('Connection response:', data);
 });
 </script>
 {% endblock %}

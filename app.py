@@ -10,15 +10,19 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'  # Tambahkan secret key
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Update konfigurasi SocketIO
+# Perbaiki konfigurasi SocketIO
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=5,
+    ping_timeout=60,  # Tingkatkan timeout
     ping_interval=25,
     logger=True,
-    engineio_logger=True
+    engineio_logger=True,
+    manage_session=False,  # Tambahkan ini
+    always_connect=True,   # Tambahkan ini
+    reconnection=True,     # Tambahkan ini
+    reconnection_attempts=5 # Tambahkan ini
 )
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
@@ -55,9 +59,28 @@ def on_leave(data):
     leave_room(room)
     emit('status', {'msg': f'{username} telah meninggalkan ruangan.'}, room=room)
 
-@socketio.on_error()
-def error_handler(e):
-    print('An error has occurred: ' + str(e))
+@socketio.on_error_default
+def default_error_handler(e):
+    print(f'An error has occurred: {str(e)}')
+    socketio.emit('error', {'message': 'An error occurred'})
+
+@socketio.on('connect')
+def handle_connect():
+    print(f'Client connected: {request.sid}')
+    emit('connect_response', {'status': 'connected'})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print(f'Client disconnected: {request.sid}')
+    if request.sid in global_users:
+        username = global_users[request.sid]
+        del global_users[request.sid]
+        emit('global_message', {
+            'username': 'System',
+            'message': f'👋 {username} meninggalkan chat',
+            'type': 'system'
+        }, broadcast=True)
+        emit('user_count', len(global_users), broadcast=True)
 
 @app.route('/global')
 def global_chat():
@@ -95,18 +118,6 @@ def handle_global_message(data):
         message_data['replyToText'] = data.get('replyToText', '')
     
     emit('global_message', message_data, broadcast=True)
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    if request.sid in global_users:
-        username = global_users[request.sid]
-        del global_users[request.sid]
-        emit('global_message', {
-            'username': 'System',
-            'message': f'👋 {username} meninggalkan chat',
-            'type': 'system'
-        }, broadcast=True)
-        emit('user_count', len(global_users), broadcast=True)
 
 if __name__ == '__main__':
     socketio.run(
