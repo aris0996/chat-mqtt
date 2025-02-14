@@ -42,27 +42,28 @@
     </div>
 </div>
 
+<div class="input-container">
+    <!-- Tambahkan div untuk preview reply -->
+    <div id="replyPreview" style="display: none;" class="reply-container">
+        <span class="reply-close" onclick="cancelReply()">×</span>
+        <div class="reply-text" id="replyText"></div>
+    </div>
+    <input type="text" id="messageInput" placeholder="Enter Message" onkeypress="checkEnter(event)">
+    <span class="send-icon" onclick="sendMessage()">
+        <i class="fas fa-paper-plane"></i>
+    </span>
+    <span class="key-icon" onclick="toggleModal()">🔑</span>
+    <label for="fileInput" class="file-label">
+        <i class="fas fa-paperclip"></i>
+    </label>
+    <input type="file" id="fileInput" accept="image/*" capture="camera" onchange="sendImage()">
+</div>
+
 <!-- Tambahkan context menu -->
 <div class="context-menu" id="contextMenu">
     <div class="context-menu-item" onclick="replyToMessage()">
         <i class="fas fa-reply"></i> Balas
     </div>
-</div>
-
-<!-- Update input container dengan reply preview -->
-<div class="input-container">
-    <div id="replyPreview" style="display: none;" class="reply-container">
-        <span class="reply-close" onclick="cancelReply()">×</span>
-        <div class="reply-text" id="replyText"></div>
-    </div>
-    <input type="text" id="messageInput" placeholder="Ketik pesan..." onkeypress="checkEnter(event)">
-    <label for="fileInput" class="file-label">
-        <i class="fas fa-paperclip"></i>
-    </label>
-    <input type="file" id="fileInput" accept="image/*" onchange="sendImage()" style="display: none;">
-    <span class="send-icon" onclick="sendMessage()">
-        <i class="fas fa-paper-plane"></i>
-    </span>
 </div>
 
 <!-- Tambahkan modal preview gambar ke dalam template -->
@@ -90,6 +91,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.js"></script>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
+    let selectedMessageId = null;
+    let replyingTo = null;
+
     const broker = 'wss://broker.emqx.io:8084/mqtt';
     const client = mqtt.connect(broker);
 
@@ -100,7 +104,14 @@
     client.on('message', (receivedTopic, message) => {
         if (receivedTopic && receivedTopic !== client.options.clientId) {
             console.log('Received message:', receivedTopic, message.toString());
-            displayMessage(receivedTopic, message.toString());
+            try {
+                // Parse pesan jika dalam format JSON
+                const parsedMessage = JSON.parse(message.toString());
+                displayMessage(receivedTopic, parsedMessage);
+            } catch (e) {
+                // Jika bukan JSON, tampilkan sebagai pesan biasa
+                displayMessage(receivedTopic, message.toString());
+            }
         }
     });
 
@@ -134,7 +145,7 @@
         if (subscribeTopic) {
             client.subscribe(subscribeTopic, (err) => {
                 if (!err) {
-                    displayMessage('', `ID kamu terdaftar: ${subscribeTopic}`);
+                    displayMessage('system', `ID kamu terdaftar: ${subscribeTopic}`);
                     toggleModal();
                 } else {
                     console.error('Subscription error:', err);
@@ -150,10 +161,21 @@
         const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
         const message = document.getElementById('messageInput').value.trim();
         if (message) {
-            client.publish(topic, message);
-            displayMessage(' ', message);
-            console.log('Published message:', message);
+            let messageToSend;
+            if (replyingTo) {
+                messageToSend = {
+                    text: message,
+                    replyTo: selectedMessageId,
+                    replyToText: replyingTo
+                };
+            } else {
+                messageToSend = message;
+            }
+
+            client.publish(topic, typeof messageToSend === 'object' ? JSON.stringify(messageToSend) : messageToSend);
+            displayMessage(' ', messageToSend);
             document.getElementById('messageInput').value = '';
+            cancelReply();
         } else {
             alert('Pesan tidak boleh kosong!');
         }
@@ -180,16 +202,69 @@
         const messageElement = document.createElement('div');
         messageElement.classList.add('message');
 
+        // Tambahkan style khusus untuk pesan sistem
+        if (topic === 'system') {
+            messageElement.classList.add('system');
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('message-content');
+            contentDiv.textContent = message;
+            messageElement.appendChild(contentDiv);
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return;
+        }
+
+        // Generate unique ID untuk pesan
+        const messageId = 'msg_' + Date.now();
+        messageElement.id = messageId;
+
+        // Event listener untuk context menu
+        messageElement.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const messageText = typeof message === 'object' ? message.text : message;
+            showContextMenu(e, messageId, messageText);
+        });
+
+        // Event listener untuk long press di mobile
+        let pressTimer;
+        messageElement.addEventListener('touchstart', () => {
+            pressTimer = setTimeout(() => {
+                const messageText = typeof message === 'object' ? message.text : message;
+                showContextMenu(event, messageId, messageText);
+            }, 500);
+        });
+        messageElement.addEventListener('touchend', () => {
+            clearTimeout(pressTimer);
+        });
+
         if (topic === ' ' || topic === '  ') {
             messageElement.classList.add('sent');
         } else {
             messageElement.classList.add('received');
         }
 
+        // Tambahkan reply preview jika ada
+        if (typeof message === 'object' && message.replyTo) {
+            const replyDiv = document.createElement('div');
+            replyDiv.classList.add('message-reply-preview');
+            
+            const replyIcon = document.createElement('i');
+            replyIcon.className = 'fas fa-reply';
+            replyDiv.appendChild(replyIcon);
+            
+            const replyText = document.createElement('span');
+            replyText.textContent = message.replyToText;
+            replyDiv.appendChild(replyText);
+            
+            messageElement.appendChild(replyDiv);
+        }
+
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('message-content');
 
-        if (message.startsWith('data:image/')) {
+        if (typeof message === 'object' && message.text) {
+            contentDiv.textContent = message.text;
+        } else if (typeof message === 'string' && message.startsWith('data:image/')) {
             const imageContainer = document.createElement('div');
             imageContainer.classList.add('message-image-container');
             
@@ -213,6 +288,37 @@
         chatContainer.appendChild(messageElement);
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
+
+    function showContextMenu(event, messageId, messageText) {
+        const contextMenu = document.getElementById('contextMenu');
+        contextMenu.style.display = 'block';
+        contextMenu.style.left = `${event.pageX}px`;
+        contextMenu.style.top = `${event.pageY}px`;
+        selectedMessageId = messageId;
+        replyingTo = messageText;
+    }
+
+    function replyToMessage() {
+        if (selectedMessageId && replyingTo) {
+            const replyPreview = document.getElementById('replyPreview');
+            const replyText = document.getElementById('replyText');
+            replyPreview.style.display = 'block';
+            replyText.textContent = replyingTo;
+            document.getElementById('messageInput').focus();
+        }
+        document.getElementById('contextMenu').style.display = 'none';
+    }
+
+    function cancelReply() {
+        document.getElementById('replyPreview').style.display = 'none';
+        selectedMessageId = null;
+        replyingTo = null;
+    }
+
+    // Tambahkan event listener untuk menutup context menu saat klik di luar
+    document.addEventListener('click', () => {
+        document.getElementById('contextMenu').style.display = 'none';
+    });
 
     // Fungsi untuk menampilkan preview gambar
     function showImagePreview(src) {
