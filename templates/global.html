@@ -97,44 +97,82 @@ let selectedMessageId = null;
 let replyingTo = null;
 let selectedMessageType = null;
 
-// Inisialisasi socket dengan konfigurasi yang benar
+// Update konfigurasi socket
 const socket = io({
-    transports: ['polling', 'websocket'],
-    upgrade: true,
+    transports: ['polling'], // Gunakan polling saja dulu
+    upgrade: false, // Nonaktifkan upgrade ke websocket
     reconnection: true,
-    reconnectionAttempts: Infinity,
+    reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     timeout: 20000,
-    autoConnect: true
+    autoConnect: true,
+    path: '/socket.io/',
+    withCredentials: true,
+    forceNew: true
 });
+
+// Tambahkan retry logic
+let retryCount = 0;
+const maxRetries = 5;
+
+function connectWithRetry() {
+    if (retryCount < maxRetries) {
+        console.log(`Attempting to reconnect (${retryCount + 1}/${maxRetries})...`);
+        socket.connect();
+        retryCount++;
+    } else {
+        console.error('Max reconnection attempts reached');
+        alert('Gagal terhubung ke server. Silakan refresh halaman.');
+    }
+}
+
+// Update socket event handlers
+socket.on('connect', () => {
+    console.log('Connected to server with ID:', socket.id);
+    retryCount = 0; // Reset retry counter on successful connection
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+    connectWithRetry();
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('Disconnected:', reason);
+    if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'transport error') {
+        connectWithRetry();
+    }
+});
+
+// Tambahkan fungsi untuk safe emit
+function safeEmit(eventName, data) {
+    try {
+        if (socket.connected) {
+            socket.emit(eventName, data);
+        } else {
+            console.warn('Socket not connected, attempting to reconnect...');
+            socket.connect();
+            setTimeout(() => socket.emit(eventName, data), 1000);
+        }
+    } catch (error) {
+        console.error('Error emitting event:', error);
+    }
+}
 
 // Tampilkan login modal saat halaman dimuat
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginModal').style.display = 'block';
 });
 
-// Socket connection handlers
-socket.on('connect', () => {
-    console.log('Connected to server with ID:', socket.id);
-});
-
-socket.on('connect_error', (error) => {
-    console.error('Connection error:', error);
-});
-
-socket.on('disconnect', (reason) => {
-    console.log('Disconnected:', reason);
-});
-
-// Fungsi untuk join chat
+// Update fungsi yang menggunakan emit
 function joinGlobalChat() {
     const username = document.getElementById('usernameInput').value.trim();
     if (username) {
         currentUsername = username;
         document.getElementById('loginModal').style.display = 'none';
         document.querySelector('.global-chat-container').style.display = 'block';
-        socket.emit('join_global', { username: username });
+        safeEmit('join_global', { username: username });
     } else {
         alert('Username tidak boleh kosong!');
     }
@@ -150,7 +188,7 @@ function sendGlobalMessage() {
             replyType: selectedMessageType,
             replyToText: replyingTo
         };
-        socket.emit('global_message', messageData);
+        safeEmit('global_message', messageData);
         document.getElementById('messageInput').value = '';
         cancelReply();
     }
@@ -167,9 +205,10 @@ function sendImage() {
                 message: base64data,
                 type: 'image',
                 replyTo: selectedMessageId,
+                replyType: selectedMessageType,
                 replyToText: replyingTo
             };
-            socket.emit('global_message', messageData);
+            safeEmit('global_message', messageData);
             cancelReply();
         };
         reader.readAsDataURL(file);
