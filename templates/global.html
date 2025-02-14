@@ -200,26 +200,16 @@ function displayMessage(data) {
     // Event listeners untuk context menu (hanya untuk pesan non-sistem)
     messageElement.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        let replyContent;
-        if (data.type === 'image') {
-            replyContent = '[Image]'; // Teks placeholder untuk gambar
-        } else {
-            replyContent = data.message;
-        }
-        showContextMenu(e, messageId, replyContent, data.type);
+        const messageText = data.type === 'image' ? data.message : data.message;
+        showContextMenu(e, messageId, messageText, data.type);
     });
 
     // Event listener untuk long press
     let pressTimer;
     messageElement.addEventListener('touchstart', () => {
         pressTimer = setTimeout(() => {
-            let replyContent;
-            if (data.type === 'image') {
-                replyContent = '[Image]';
-            } else {
-                replyContent = data.message;
-            }
-            showContextMenu(event, messageId, replyContent, data.type);
+            const messageText = data.type === 'image' ? data.message : data.message;
+            showContextMenu(event, messageId, messageText, data.type);
         }, 500);
     });
     messageElement.addEventListener('touchend', () => {
@@ -346,7 +336,25 @@ function replyToMessage() {
         const replyPreview = document.getElementById('replyPreview');
         const replyText = document.getElementById('replyText');
         replyPreview.style.display = 'block';
-        replyText.textContent = replyingTo;
+        
+        // Clear previous content
+        replyText.innerHTML = '';
+        
+        // Jika yang direply adalah gambar
+        if (selectedMessageType === 'image') {
+            const replyImgContainer = document.createElement('div');
+            replyImgContainer.classList.add('reply-image-container');
+            
+            const replyImg = document.createElement('img');
+            replyImg.src = replyingTo;
+            replyImg.classList.add('reply-thumbnail');
+            
+            replyImgContainer.appendChild(replyImg);
+            replyText.appendChild(replyImgContainer);
+        } else {
+            replyText.textContent = replyingTo;
+        }
+        
         document.getElementById('messageInput').focus();
     }
     document.getElementById('contextMenu').style.display = 'none';
@@ -407,18 +415,46 @@ socket.on('error', (error) => {
     border-top: 1px solid #ddd;
 }
 
+.reply-container {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 8px 12px;
+    border-left: 4px solid #128C7E;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+}
+
+.reply-text {
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
 .reply-image-container {
-    max-width: 50px;
-    max-height: 50px;
+    max-width: 40px;
+    max-height: 40px;
     overflow: hidden;
     border-radius: 4px;
-    margin-left: 8px;
+    margin-right: 8px;
 }
 
 .reply-thumbnail {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.reply-close {
+    cursor: pointer;
+    color: #999;
+    padding: 2px 5px;
+    margin-left: 8px;
+}
+
+.reply-close:hover {
+    color: #666;
 }
 
 .message-reply-preview {
