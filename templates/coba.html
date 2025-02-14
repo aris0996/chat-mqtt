@@ -93,6 +93,7 @@
 <script>
     let selectedMessageId = null;
     let replyingTo = null;
+    let selectedMessageType = null;
 
     const broker = 'wss://broker.emqx.io:8084/mqtt';
     const client = mqtt.connect(broker);
@@ -180,18 +181,15 @@
         const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
         const message = document.getElementById('messageInput').value.trim();
         if (message) {
-            let messageToSend;
-            if (replyingTo) {
-                messageToSend = {
-                    text: message,
-                    replyTo: selectedMessageId,
-                    replyToText: replyingTo
-                };
-            } else {
-                messageToSend = message;
-            }
+            let messageToSend = {
+                text: message,
+                type: 'text',
+                replyTo: selectedMessageId,
+                replyType: selectedMessageType,
+                replyToText: replyingTo
+            };
 
-            client.publish(topic, typeof messageToSend === 'object' ? JSON.stringify(messageToSend) : messageToSend);
+            client.publish(topic, JSON.stringify(messageToSend));
             displayMessage(' ', messageToSend);
             document.getElementById('messageInput').value = '';
             cancelReply();
@@ -208,9 +206,16 @@
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64data = reader.result;
-                client.publish(topic, base64data);
-                displayMessage(' ', base64data);
-                console.log('Published image');
+                const messageData = {
+                    text: base64data,
+                    type: 'image',
+                    replyTo: selectedMessageId,
+                    replyType: selectedMessageType,
+                    replyToText: replyingTo
+                };
+                client.publish(topic, JSON.stringify(messageData));
+                displayMessage(' ', messageData);
+                cancelReply();
             };
             reader.readAsDataURL(file);
         }
@@ -241,7 +246,7 @@
         messageElement.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             const messageText = typeof message === 'object' ? message.text : message;
-            showContextMenu(e, messageId, messageText);
+            showContextMenu(e, messageId, messageText, message.type);
         });
 
         // Event listener untuk long press di mobile
@@ -249,7 +254,7 @@
         messageElement.addEventListener('touchstart', () => {
             pressTimer = setTimeout(() => {
                 const messageText = typeof message === 'object' ? message.text : message;
-                showContextMenu(event, messageId, messageText);
+                showContextMenu(event, messageId, messageText, message.type);
             }, 500);
         });
         messageElement.addEventListener('touchend', () => {
@@ -263,7 +268,7 @@
         }
 
         // Tambahkan reply preview jika ada
-        if (typeof message === 'object' && message.replyTo) {
+        if (message.replyTo) {
             const replyDiv = document.createElement('div');
             replyDiv.classList.add('message-reply-preview');
             
@@ -271,9 +276,22 @@
             replyIcon.className = 'fas fa-reply';
             replyDiv.appendChild(replyIcon);
             
-            const replyText = document.createElement('span');
-            replyText.textContent = message.replyToText;
-            replyDiv.appendChild(replyText);
+            // Jika yang direply adalah gambar
+            if (message.replyType === 'image') {
+                const replyImgContainer = document.createElement('div');
+                replyImgContainer.classList.add('reply-image-container');
+                
+                const replyImg = document.createElement('img');
+                replyImg.src = message.replyToText;
+                replyImg.classList.add('reply-thumbnail');
+                
+                replyImgContainer.appendChild(replyImg);
+                replyDiv.appendChild(replyImgContainer);
+            } else {
+                const replyText = document.createElement('span');
+                replyText.textContent = message.replyToText;
+                replyDiv.appendChild(replyText);
+            }
             
             messageElement.appendChild(replyDiv);
         }
@@ -281,21 +299,19 @@
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('message-content');
 
-        if (typeof message === 'object' && message.text) {
-            contentDiv.textContent = message.text;
-        } else if (typeof message === 'string' && message.startsWith('data:image/')) {
+        if (message.type === 'image' || (typeof message === 'string' && message.startsWith('data:image/'))) {
             const imageContainer = document.createElement('div');
             imageContainer.classList.add('message-image-container');
             
             const img = document.createElement('img');
-            img.src = message;
+            img.src = message.type === 'image' ? message.text : message;
             img.classList.add('message-thumbnail');
-            img.onclick = () => showImagePreview(message);
+            img.onclick = () => showImagePreview(img.src);
             
             imageContainer.appendChild(img);
             contentDiv.appendChild(imageContainer);
         } else {
-            contentDiv.textContent = message;
+            contentDiv.textContent = message.text || message;
         }
 
         const timestamp = document.createElement('span');
@@ -308,13 +324,15 @@
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    function showContextMenu(event, messageId, messageText) {
+    function showContextMenu(event, messageId, messageText, messageType) {
+        event.preventDefault();
         const contextMenu = document.getElementById('contextMenu');
         contextMenu.style.display = 'block';
         contextMenu.style.left = `${event.pageX}px`;
         contextMenu.style.top = `${event.pageY}px`;
         selectedMessageId = messageId;
         replyingTo = messageText;
+        selectedMessageType = messageType;
     }
 
     function replyToMessage() {
@@ -322,7 +340,25 @@
             const replyPreview = document.getElementById('replyPreview');
             const replyText = document.getElementById('replyText');
             replyPreview.style.display = 'block';
-            replyText.textContent = replyingTo;
+            
+            // Clear previous content
+            replyText.innerHTML = '';
+            
+            // Jika yang direply adalah gambar
+            if (selectedMessageType === 'image') {
+                const replyImgContainer = document.createElement('div');
+                replyImgContainer.classList.add('reply-image-container');
+                
+                const replyImg = document.createElement('img');
+                replyImg.src = replyingTo;
+                replyImg.classList.add('reply-thumbnail');
+                
+                replyImgContainer.appendChild(replyImg);
+                replyText.appendChild(replyImgContainer);
+            } else {
+                replyText.textContent = replyingTo;
+            }
+            
             document.getElementById('messageInput').focus();
         }
         document.getElementById('contextMenu').style.display = 'none';
@@ -332,6 +368,7 @@
         document.getElementById('replyPreview').style.display = 'none';
         selectedMessageId = null;
         replyingTo = null;
+        selectedMessageType = null;
     }
 
     // Tambahkan event listener untuk menutup context menu saat klik di luar
@@ -363,4 +400,86 @@
         document.body.removeChild(link);
     }
 </script>
+
+<style>
+    /* Tambahkan style untuk reply thumbnail */
+    .reply-image-container {
+        max-width: 50px;
+        max-height: 50px;
+        overflow: hidden;
+        border-radius: 4px;
+        margin-left: 8px;
+    }
+
+    .reply-thumbnail {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .message-reply-preview {
+        display: flex;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.05);
+        padding: 4px 8px;
+        margin-bottom: 5px;
+        border-left: 3px solid #128C7E;
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
+
+    .message-reply-preview i {
+        color: #128C7E;
+        font-size: 0.8rem;
+        margin-right: 8px;
+    }
+
+    .message-reply-preview .reply-thumbnail {
+        margin-left: 8px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    /* Tambahkan style untuk preview reply */
+    .reply-container {
+        background: rgba(0, 0, 0, 0.05);
+        padding: 8px 12px;
+        border-left: 4px solid #128C7E;
+        border-radius: 4px;
+        margin-bottom: 5px;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .reply-text {
+        flex: 1;
+        display: flex;
+        align-items: center;
+    }
+
+    .reply-image-container {
+        max-width: 40px;
+        max-height: 40px;
+        overflow: hidden;
+        border-radius: 4px;
+        margin-right: 8px;
+    }
+
+    .reply-thumbnail {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .reply-close {
+        cursor: pointer;
+        color: #999;
+        padding: 2px 5px;
+        margin-left: 8px;
+    }
+
+    .reply-close:hover {
+        color: #666;
+    }
+</style>
 {% endblock %}
