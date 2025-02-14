@@ -7,22 +7,23 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from engineio.async_drivers import threading
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'  # Tambahkan secret key
+app.config['SECRET_KEY'] = os.urandom(24)  # Generate random secret key
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Perbaiki konfigurasi SocketIO
+# Update konfigurasi SocketIO
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=60,  # Tingkatkan timeout
+    ping_timeout=60,
     ping_interval=25,
     logger=True,
     engineio_logger=True,
-    manage_session=False,  # Tambahkan ini
-    always_connect=True,   # Tambahkan ini
-    reconnection=True,     # Tambahkan ini
-    reconnection_attempts=5 # Tambahkan ini
+    manage_session=False,
+    always_connect=True,
+    path='/socket.io/',
+    allow_upgrades=False,  # Nonaktifkan upgrade ke websocket
+    transports=['polling']  # Gunakan polling saja
 )
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
@@ -67,7 +68,8 @@ def default_error_handler(e):
 @socketio.on('connect')
 def handle_connect():
     print(f'Client connected: {request.sid}')
-    emit('connect_response', {'status': 'connected'})
+    session['sid'] = request.sid
+    emit('connect_response', {'status': 'connected', 'sid': request.sid})
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -90,18 +92,21 @@ online_users = set()
 
 @socketio.on('join_global')
 def handle_global_join(data):
-    username = data['username']
-    session['username'] = username
-    global_users[request.sid] = username
-    
-    # Kirim pesan sistem untuk user baru
-    emit('global_message', {
-        'username': 'System',
-        'message': f'👋 {username} bergabung ke chat',
-        'type': 'system'
-    }, broadcast=True)
-    
-    emit('user_count', len(global_users), broadcast=True)
+    try:
+        username = data['username']
+        session['username'] = username
+        global_users[request.sid] = username
+        
+        emit('global_message', {
+            'username': 'System',
+            'message': f'👋 {username} bergabung ke chat',
+            'type': 'system'
+        }, broadcast=True)
+        
+        emit('user_count', len(global_users), broadcast=True)
+    except Exception as e:
+        print(f'Error in join_global: {str(e)}')
+        emit('error', {'message': 'Failed to join chat'})
 
 @socketio.on('global_message')
 def handle_global_message(data):

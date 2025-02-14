@@ -96,13 +96,14 @@
 <script>
 let currentUsername = '';
 const socket = io({
-    transports: ['websocket', 'polling'],
+    transports: ['polling'],
+    upgrade: false,
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     timeout: 60000,
-    autoConnect: true,
-    forceNew: true
+    path: '/socket.io/',
+    query: { transport: 'polling' }
 });
 let selectedMessageId = null;
 let replyingTo = null;
@@ -316,7 +317,7 @@ function cancelReply() {
 
 // Socket event listeners
 socket.on('connect', () => {
-    console.log('Connected to server');
+    console.log('Connected to server with ID:', socket.id);
 });
 
 socket.on('global_message', (data) => {
@@ -329,6 +330,10 @@ socket.on('user_count', (count) => {
 
 socket.on('connect_error', (error) => {
     console.error('Connection error:', error);
+    if (error.message === 'Invalid websocket upgrade') {
+        socket.io.opts.transports = ['polling'];
+        socket.connect();
+    }
 });
 
 socket.on('error', (error) => {
@@ -337,8 +342,8 @@ socket.on('error', (error) => {
 
 socket.on('disconnect', (reason) => {
     console.log('Disconnected:', reason);
-    if (reason === 'io server disconnect') {
-        socket.connect(); // Reconnect jika server memutuskan koneksi
+    if (reason === 'io server disconnect' || reason === 'transport close') {
+        socket.connect();
     }
 });
 
