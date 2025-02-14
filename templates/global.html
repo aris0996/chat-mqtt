@@ -95,24 +95,73 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
 let currentUsername = '';
+
+// Ubah konfigurasi socket
 const socket = io({
-    transports: ['polling'],
-    upgrade: false,
+    transports: ['polling', 'websocket'],
+    upgrade: true,
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
-    timeout: 60000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000,
+    autoConnect: true,
     path: '/socket.io/',
-    query: { transport: 'polling' }
+    withCredentials: true
 });
+
 let selectedMessageId = null;
 let replyingTo = null;
 
-// Show login modal on page load
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('loginModal').style.display = 'block';
+// Tambahkan retry logic
+let retryCount = 0;
+const maxRetries = 5;
+
+function connectWithRetry() {
+    if (retryCount < maxRetries) {
+        console.log(`Attempting to reconnect (${retryCount + 1}/${maxRetries})...`);
+        socket.connect();
+        retryCount++;
+    } else {
+        console.error('Max reconnection attempts reached');
+        alert('Gagal terhubung ke server. Silakan refresh halaman.');
+    }
+}
+
+// Update event handlers
+socket.on('connect', () => {
+    console.log('Connected to server with ID:', socket.id);
+    retryCount = 0; // Reset retry counter on successful connection
 });
 
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+    connectWithRetry();
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('Disconnected:', reason);
+    if (reason === 'io server disconnect' || reason === 'transport close') {
+        connectWithRetry();
+    }
+});
+
+// Tambahkan error handling untuk emit
+function safeEmit(eventName, data) {
+    try {
+        if (socket.connected) {
+            socket.emit(eventName, data);
+        } else {
+            console.warn('Socket not connected, attempting to reconnect...');
+            socket.connect();
+            setTimeout(() => socket.emit(eventName, data), 1000);
+        }
+    } catch (error) {
+        console.error('Error emitting event:', error);
+    }
+}
+
+// Update fungsi join dan send message
 function joinGlobalChat() {
     const username = document.getElementById('usernameInput').value.trim();
     if (username) {
@@ -120,8 +169,7 @@ function joinGlobalChat() {
         document.getElementById('loginModal').style.display = 'none';
         document.querySelector('.global-chat-container').style.display = 'block';
         
-        // Emit join event to server
-        socket.emit('join_global', { username: username });
+        safeEmit('join_global', { username: username });
     } else {
         alert('Username tidak boleh kosong!');
     }
@@ -138,7 +186,7 @@ function sendGlobalMessage() {
         if (replyingTo) {
             messageData.replyToText = replyingTo;
         }
-        socket.emit('global_message', messageData);
+        safeEmit('global_message', messageData);
         document.getElementById('messageInput').value = '';
         cancelReply();
     }
@@ -316,39 +364,12 @@ function cancelReply() {
 }
 
 // Socket event listeners
-socket.on('connect', () => {
-    console.log('Connected to server with ID:', socket.id);
-});
-
 socket.on('global_message', (data) => {
     displayMessage(data);
 });
 
 socket.on('user_count', (count) => {
     document.getElementById('onlineCount').textContent = count;
-});
-
-socket.on('connect_error', (error) => {
-    console.error('Connection error:', error);
-    if (error.message === 'Invalid websocket upgrade') {
-        socket.io.opts.transports = ['polling'];
-        socket.connect();
-    }
-});
-
-socket.on('error', (error) => {
-    console.error('Socket error:', error);
-});
-
-socket.on('disconnect', (reason) => {
-    console.log('Disconnected:', reason);
-    if (reason === 'io server disconnect' || reason === 'transport close') {
-        socket.connect();
-    }
-});
-
-socket.on('connect_response', (data) => {
-    console.log('Connection response:', data);
 });
 </script>
 {% endblock %}

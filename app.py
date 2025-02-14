@@ -15,15 +15,17 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=60,
-    ping_interval=25,
+    ping_timeout=20,
+    ping_interval=10,
     logger=True,
     engineio_logger=True,
-    manage_session=False,
+    manage_session=True,
     always_connect=True,
     path='/socket.io/',
-    allow_upgrades=False,  # Nonaktifkan upgrade ke websocket
-    transports=['polling']  # Gunakan polling saja
+    allow_upgrades=True,
+    upgrade_timeout=10000,
+    max_http_buffer_size=1e8,
+    transports=['polling', 'websocket']
 )
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
@@ -62,27 +64,36 @@ def on_leave(data):
 
 @socketio.on_error_default
 def default_error_handler(e):
-    print(f'An error has occurred: {str(e)}')
-    socketio.emit('error', {'message': 'An error occurred'})
+    print(f'SocketIO error occurred: {str(e)}')
+    try:
+        emit('error', {'message': 'An error occurred', 'details': str(e)})
+    except Exception as emit_error:
+        print(f'Error sending error message: {str(emit_error)}')
 
 @socketio.on('connect')
 def handle_connect():
-    print(f'Client connected: {request.sid}')
-    session['sid'] = request.sid
-    emit('connect_response', {'status': 'connected', 'sid': request.sid})
+    try:
+        print(f'Client connected: {request.sid}')
+        session['sid'] = request.sid
+        emit('connect_response', {'status': 'connected', 'sid': request.sid})
+    except Exception as e:
+        print(f'Error in handle_connect: {str(e)}')
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    print(f'Client disconnected: {request.sid}')
-    if request.sid in global_users:
-        username = global_users[request.sid]
-        del global_users[request.sid]
-        emit('global_message', {
-            'username': 'System',
-            'message': f'👋 {username} meninggalkan chat',
-            'type': 'system'
-        }, broadcast=True)
-        emit('user_count', len(global_users), broadcast=True)
+    try:
+        print(f'Client disconnected: {request.sid}')
+        if request.sid in global_users:
+            username = global_users[request.sid]
+            del global_users[request.sid]
+            emit('global_message', {
+                'username': 'System',
+                'message': f'👋 {username} meninggalkan chat',
+                'type': 'system'
+            }, broadcast=True)
+            emit('user_count', len(global_users), broadcast=True)
+    except Exception as e:
+        print(f'Error in handle_disconnect: {str(e)}')
 
 @app.route('/global')
 def global_chat():
