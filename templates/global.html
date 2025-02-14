@@ -204,7 +204,7 @@ function displayMessage(data) {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message');
     
-    // Jika pesan sistem, tampilkan berbeda
+    // Jika pesan sistem, update jumlah user online jika ada
     if (data.type === 'system') {
         messageElement.classList.add('system');
         const contentDiv = document.createElement('div');
@@ -212,6 +212,12 @@ function displayMessage(data) {
         contentDiv.textContent = data.message;
         messageElement.appendChild(contentDiv);
         chatContainer.appendChild(messageElement);
+        
+        // Update jumlah user online jika ada perubahan
+        if (data.onlineCount !== undefined) {
+            updateOnlineCount(data.onlineCount);
+        }
+        
         chatContainer.scrollTop = chatContainer.scrollHeight;
         return;
     }
@@ -390,24 +396,15 @@ function cancelReply() {
     selectedMessageType = null;
 }
 
-// Socket event listeners
-socket.on('global_message', (data) => {
-    displayMessage(data);
+// Tampilkan login modal saat halaman dimuat
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('loginModal').style.display = 'block';
 });
 
-socket.on('user_count', (count) => {
-    document.getElementById('onlineCount').textContent = count;
-});
-
-socket.on('connect_response', (data) => {
-    console.log('Connection response:', data);
-});
-
-// Error handling
-socket.on('error', (error) => {
-    console.error('Socket error:', error);
-    alert('Terjadi kesalahan: ' + error.message);
-});
+// Tambahkan fungsi untuk menghitung user online
+function updateOnlineCount(count) {
+    document.getElementById('onlineCount').textContent = count || '0';
+}
 </script>
 
 <style>
