@@ -120,8 +120,27 @@
     });
 
     const socket = io({
-        transports: ['polling', 'websocket'],
-        upgrade: false
+        transports: ['websocket'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+    });
+
+    // Tambahkan error handling untuk socket
+    socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+    });
+
+    socket.on('connect_timeout', () => {
+        console.error('Socket connection timeout');
+    });
+
+    socket.on('reconnect', (attemptNumber) => {
+        console.log('Reconnected on attempt:', attemptNumber);
+    });
+
+    socket.on('reconnect_error', (error) => {
+        console.error('Socket reconnection error:', error);
     });
 
     function toggleModal() {

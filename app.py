@@ -4,11 +4,22 @@ from flask_cors import CORS
 import os
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
+from engineio.async_drivers import threading
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'  # Tambahkan secret key
-CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# Update konfigurasi SocketIO
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='threading',
+    ping_timeout=5,
+    ping_interval=25,
+    logger=True,
+    engineio_logger=True
+)
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
 logging.getLogger('engineio').setLevel(logging.DEBUG)
@@ -98,4 +109,10 @@ def handle_disconnect():
         emit('user_count', len(global_users), broadcast=True)
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(
+        app,
+        debug=True,
+        host='0.0.0.0',
+        port=5000,
+        allow_unsafe_werkzeug=True  # Hanya untuk development
+    )
