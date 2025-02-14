@@ -60,10 +60,11 @@
             <div class="reply-text" id="replyText"></div>
         </div>
         <input type="text" id="messageInput" placeholder="Ketik pesan..." onkeypress="checkEnter(event)">
-        <label for="fileInput" class="file-label">
+        <label for="fileInput" class="file-label" onclick="showImageOptions(event)">
             <i class="fas fa-paperclip"></i>
         </label>
-        <input type="file" id="fileInput" accept="image/*" onchange="sendImage()" style="display: none;">
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="handleImageSelect(this)" style="display: none;">
+        <input type="file" id="galleryInput" accept="image/*" onchange="handleImageSelect(this)" style="display: none;">
         <span class="send-icon" onclick="sendGlobalMessage()">
             <i class="fas fa-paper-plane"></i>
         </span>
@@ -84,6 +85,20 @@
                 <i class="fas fa-times"></i>
                 Tutup
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tambahkan modal opsi gambar -->
+<div class="image-options-modal" id="imageOptionsModal">
+    <div class="image-options-content">
+        <div class="image-option" onclick="selectImageSource('camera')">
+            <i class="fas fa-camera"></i>
+            <span>Ambil Foto</span>
+        </div>
+        <div class="image-option" onclick="selectImageSource('gallery')">
+            <i class="fas fa-images"></i>
+            <span>Pilih dari Galeri</span>
         </div>
     </div>
 </div>
@@ -163,26 +178,109 @@ function sendGlobalMessage() {
     }
 }
 
-function sendImage() {
-    const fileInput = document.getElementById('fileInput');
-    const file = fileInput.files[0];
-    if (file && currentUsername) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64data = reader.result;
-            const messageData = {
-                username: currentUsername,
-                message: base64data,
-                type: 'image',
-                replyTo: selectedMessageId,
-                replyType: selectedMessageType,
-                replyToText: replyingTo,
-                timestamp: new Date().toISOString()
-            };
-            client.publish(globalTopic, JSON.stringify(messageData));
-            cancelReply();
+// Fungsi untuk kompresi gambar yang lebih optimal
+async function compressImage(base64Image, maxSize = 800) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Image;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // Hitung rasio kompresi
+            if (width > height) {
+                if (width > maxSize) {
+                    height = Math.round(height * maxSize / width);
+                    width = maxSize;
+                }
+            } else {
+                if (height > maxSize) {
+                    width = Math.round(width * maxSize / height);
+                    height = maxSize;
+                }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Kompresi progresif
+            let quality = 0.7;
+            let compressed = canvas.toDataURL('image/jpeg', quality);
+            
+            // Jika ukuran masih terlalu besar, kompres lagi
+            while (compressed.length > 100000 && quality > 0.1) {
+                quality -= 0.1;
+                compressed = canvas.toDataURL('image/jpeg', quality);
+            }
+            
+            resolve(compressed);
         };
-        reader.readAsDataURL(file);
+    });
+}
+
+// Fungsi untuk menampilkan opsi gambar
+function showImageOptions(event) {
+    event.preventDefault();
+    const modal = document.getElementById('imageOptionsModal');
+    modal.style.display = 'block';
+}
+
+// Fungsi untuk memilih sumber gambar
+function selectImageSource(source) {
+    const modal = document.getElementById('imageOptionsModal');
+    if (source === 'camera') {
+        document.getElementById('cameraInput').click();
+    } else {
+        document.getElementById('galleryInput').click();
+    }
+    modal.style.display = 'none';
+}
+
+// Fungsi untuk menangani pemilihan gambar
+async function handleImageSelect(input) {
+    const file = input.files[0];
+    if (file) {
+        try {
+            // Tampilkan loading indicator
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.className = 'loading-indicator active';
+            loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses gambar...';
+            input.parentNode.appendChild(loadingIndicator);
+
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const base64data = reader.result;
+                
+                // Kompresi gambar
+                const compressedImage = await compressImage(base64data);
+                const thumbnailImage = await compressImage(base64data, 100); // Thumbnail lebih kecil
+                
+                const messageData = {
+                    username: currentUsername,
+                    message: compressedImage, // Gambar yang sudah dikompresi
+                    thumbnail: thumbnailImage, // Thumbnail untuk reply
+                    type: 'image',
+                    replyTo: selectedMessageId,
+                    replyType: selectedMessageType,
+                    replyToText: replyingTo,
+                    timestamp: new Date().toISOString()
+                };
+                
+                client.publish(globalTopic, JSON.stringify(messageData));
+                cancelReply();
+                
+                // Hapus loading indicator
+                loadingIndicator.remove();
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            console.error('Error processing image:', error);
+            alert('Gagal memproses gambar. Silakan coba lagi.');
+        }
     }
 }
 
@@ -264,8 +362,8 @@ function displayMessage(data) {
     headerDiv.appendChild(timestamp);
     messageElement.appendChild(headerDiv);
 
-    // Tambahkan reply preview jika ada
-    if (data.replyToText) {
+    // Update bagian reply preview
+    if (data.replyTo) {
         const replyDiv = document.createElement('div');
         replyDiv.classList.add('message-reply-preview');
         
@@ -273,14 +371,15 @@ function displayMessage(data) {
         replyIcon.className = 'fas fa-reply';
         replyDiv.appendChild(replyIcon);
         
-        // Jika yang direply adalah gambar
+        // Jika yang direply adalah gambar, gunakan thumbnail
         if (data.replyType === 'image') {
             const replyImgContainer = document.createElement('div');
             replyImgContainer.classList.add('reply-image-container');
             
             const replyImg = document.createElement('img');
-            replyImg.src = data.replyToText;
+            replyImg.src = data.thumbnail || data.replyToText; // Gunakan thumbnail jika ada
             replyImg.classList.add('reply-thumbnail');
+            replyImg.onclick = () => showImagePreview(data.replyToText); // Preview gambar original
             
             replyImgContainer.appendChild(replyImg);
             replyDiv.appendChild(replyImgContainer);
@@ -458,12 +557,18 @@ function updateOnlineCount(count) {
     overflow: hidden;
     border-radius: 4px;
     margin-right: 8px;
+    cursor: pointer;
 }
 
 .reply-thumbnail {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transition: transform 0.2s ease;
+}
+
+.reply-thumbnail:hover {
+    transform: scale(1.1);
 }
 
 .reply-close {
@@ -497,6 +602,98 @@ function updateOnlineCount(count) {
 .message-reply-preview .reply-thumbnail {
     margin-left: 8px;
     border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Tambahkan style untuk loading indicator */
+.loading-indicator {
+    display: none;
+    margin: 0 10px;
+    color: #666;
+}
+
+.loading-indicator.active {
+    display: inline-block;
+}
+
+/* Style untuk modal opsi gambar */
+.image-options-modal {
+    display: none;
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translate(-50%, 100%);
+    }
+    to {
+        transform: translate(-50%, 0);
+    }
+}
+
+.image-options-content {
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+}
+
+.image-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px 25px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-radius: 8px;
+}
+
+.image-option:hover {
+    background: #f5f5f5;
+}
+
+.image-option i {
+    font-size: 24px;
+    color: #128C7E;
+    margin-bottom: 5px;
+}
+
+.image-option span {
+    font-size: 14px;
+    color: #666;
+}
+
+/* Loading indicator */
+.loading-indicator {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 1000;
+}
+
+.loading-indicator i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% {
+        transform: rotate(360deg);
+    }
 }
 </style>
 {% endblock %}
