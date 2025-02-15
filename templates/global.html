@@ -105,56 +105,46 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
 let currentUsername = '';
 let selectedMessageId = null;
 let replyingTo = null;
 let selectedMessageType = null;
 
-// Konfigurasi MQTT
-const broker = 'wss://broker.emqx.io:8084/mqtt';
-const client = mqtt.connect(broker);
-const globalTopic = 'global_chat'; // Topic untuk global chat
-
-// MQTT connection handlers
-client.on('connect', () => {
-    console.log('Connected to MQTT broker');
-    client.subscribe(globalTopic, (err) => {
-        if (!err) {
-            console.log('Subscribed to global chat');
-        }
-    });
+// Konfigurasi Socket.IO
+const socket = io({
+    transports: ['polling', 'websocket'],
+    upgrade: true,
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000,
+    autoConnect: true
 });
 
-client.on('message', (topic, message) => {
-    try {
-        const data = JSON.parse(message.toString());
-        displayMessage(data);
-    } catch (e) {
-        console.error('Error parsing message:', e);
-    }
+// Socket connection handlers
+socket.on('connect', () => {
+    console.log('Connected to server with ID:', socket.id);
 });
 
-client.on('error', (error) => {
-    console.error('MQTT error:', error);
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
 });
 
-// Update fungsi untuk menggunakan MQTT
+socket.on('disconnect', (reason) => {
+    console.log('Disconnected:', reason);
+});
+
+// Update fungsi untuk menggunakan Socket.IO
 function joinGlobalChat() {
     const username = document.getElementById('usernameInput').value.trim();
     if (username) {
         currentUsername = username;
         document.getElementById('loginModal').style.display = 'none';
         document.querySelector('.global-chat-container').style.display = 'block';
-        
-        // Kirim pesan join
-        const joinMessage = {
-            type: 'system',
-            username: username,
-            message: `👋 ${username} bergabung ke chat`
-        };
-        client.publish(globalTopic, JSON.stringify(joinMessage));
+        socket.emit('join_global', { username: username });
     } else {
         alert('Username tidak boleh kosong!');
     }
@@ -162,17 +152,15 @@ function joinGlobalChat() {
 
 function sendGlobalMessage() {
     const message = document.getElementById('messageInput').value.trim();
-    if (message && currentUsername) {
+    if (message) {
         const messageData = {
-            username: currentUsername,
             message: message,
             type: 'text',
             replyTo: selectedMessageId,
             replyType: selectedMessageType,
-            replyToText: replyingTo,
-            timestamp: new Date().toISOString()
+            replyToText: replyingTo
         };
-        client.publish(globalTopic, JSON.stringify(messageData));
+        socket.emit('global_message', messageData);
         document.getElementById('messageInput').value = '';
         cancelReply();
     }
@@ -240,7 +228,7 @@ function selectImageSource(source) {
     modal.style.display = 'none';
 }
 
-// Fungsi untuk menangani pemilihan gambar
+// Update fungsi handleImageSelect
 async function handleImageSelect(input) {
     const file = input.files[0];
     if (file) {
@@ -260,21 +248,19 @@ async function handleImageSelect(input) {
                 const thumbnailImage = await compressImage(base64data, 100); // Thumbnail lebih kecil
                 
                 const messageData = {
-                    username: currentUsername,
-                    message: compressedImage, // Gambar yang sudah dikompresi
-                    thumbnail: thumbnailImage, // Thumbnail untuk reply
+                    message: compressedImage,
+                    thumbnail: thumbnailImage,
                     type: 'image',
                     replyTo: selectedMessageId,
                     replyType: selectedMessageType,
-                    replyToText: replyingTo,
-                    timestamp: new Date().toISOString()
+                    replyToText: replyingTo
                 };
                 
-                client.publish(globalTopic, JSON.stringify(messageData));
-                cancelReply();
+                socket.emit('global_message', messageData);
                 
                 // Hapus loading indicator
                 loadingIndicator.remove();
+                cancelReply();
             };
             reader.readAsDataURL(file);
         } catch (error) {
@@ -284,17 +270,13 @@ async function handleImageSelect(input) {
     }
 }
 
-// Tambahkan event listener untuk disconnect
-window.addEventListener('beforeunload', () => {
-    if (currentUsername) {
-        const leaveMessage = {
-            type: 'system',
-            username: currentUsername,
-            message: `👋 ${currentUsername} meninggalkan chat`
-        };
-        client.publish(globalTopic, JSON.stringify(leaveMessage));
-        client.end();
-    }
+// Socket event listeners
+socket.on('global_message', (data) => {
+    displayMessage(data);
+});
+
+socket.on('user_count', (count) => {
+    document.getElementById('onlineCount').textContent = count;
 });
 
 function displayMessage(data) {

@@ -102,422 +102,380 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.js"></script>
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
-    let selectedMessageId = null;
-    let replyingTo = null;
-    let selectedMessageType = null;
+let selectedMessageId = null;
+let replyingTo = null;
+let selectedMessageType = null;
 
-    const broker = 'wss://broker.emqx.io:8084/mqtt';
-    const client = mqtt.connect(broker);
+// Konfigurasi Socket.IO
+const socket = io({
+    transports: ['polling', 'websocket'],
+    upgrade: true,
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000,
+    autoConnect: true
+});
 
-    client.on('connect', () => {
-        console.log('Connected to MQTT broker');
-    });
+// Socket connection handlers
+socket.on('connect', () => {
+    console.log('Connected to server');
+});
 
-    client.on('message', (receivedTopic, message) => {
-        if (receivedTopic && receivedTopic !== client.options.clientId) {
-            console.log('Received message:', receivedTopic, message.toString());
-            try {
-                // Parse pesan jika dalam format JSON
-                const parsedMessage = JSON.parse(message.toString());
-                displayMessage(receivedTopic, parsedMessage);
-            } catch (e) {
-                // Jika bukan JSON, tampilkan sebagai pesan biasa
-                displayMessage(receivedTopic, message.toString());
-            }
-        }
-    });
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+});
 
-    client.on('error', (error) => {
-        console.error('Connection error:', error);
-    });
+socket.on('disconnect', (reason) => {
+    console.log('Disconnected:', reason);
+});
 
-    const socket = io({
-        transports: ['websocket'],
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
-    });
+function toggleModal() {
+    const modal = document.getElementById('settingsModal');
+    modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+}
 
-    // Tambahkan error handling untuk socket
-    socket.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
-    });
+function closeModal() {
+    const modal = document.getElementById('settingsModal');
+    modal.style.display = 'none';
+}
 
-    socket.on('connect_timeout', () => {
-        console.error('Socket connection timeout');
-    });
-
-    socket.on('reconnect', (attemptNumber) => {
-        console.log('Reconnected on attempt:', attemptNumber);
-    });
-
-    socket.on('reconnect_error', (error) => {
-        console.error('Socket reconnection error:', error);
-    });
-
-    function toggleModal() {
-        const modal = document.getElementById('settingsModal');
-        modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+function checkEnter(event) {
+    if (event.key === 'Enter') {
+        sendMessage(); // Panggil fungsi kirim pesan
     }
+}
 
-    function closeModal() {
-        const modal = document.getElementById('settingsModal');
-        modal.style.display = 'none';
+function subscribeTopic() {
+    const subscribeTopic = document.getElementById('subscribeTopicInput').value.trim();
+    if (subscribeTopic) {
+        socket.emit('join', {
+            username: subscribeTopic,
+            room: subscribeTopic
+        });
+        displayMessage('system', `ID kamu terdaftar: ${subscribeTopic}`);
+        toggleModal();
+    } else {
+        alert('ID cannot be empty!');
     }
+}
 
-    function checkEnter(event) {
-        if (event.key === 'Enter') {
-            sendMessage(); // Panggil fungsi kirim pesan
-        }
+function sendMessage() {
+    const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
+    const message = document.getElementById('messageInput').value.trim();
+    if (message) {
+        const messageData = {
+            text: message,
+            type: 'text',
+            replyTo: selectedMessageId,
+            replyType: selectedMessageType,
+            replyToText: replyingTo,
+            room: topic
+        };
+        socket.emit('message', messageData);
+        displayMessage(' ', messageData);
+        document.getElementById('messageInput').value = '';
+        cancelReply();
     }
+}
 
-    function subscribeTopic() {
-        const subscribeTopic = document.getElementById('subscribeTopicInput').value.trim();
-        if (subscribeTopic) {
-            client.subscribe(subscribeTopic, (err) => {
-                if (!err) {
-                    displayMessage('system', `ID kamu terdaftar: ${subscribeTopic}`);
-                    toggleModal();
-                } else {
-                    console.error('Subscription error:', err);
-                    alert('Failed to subscribe to topic');
-                }
-            });
-        } else {
-            alert('ID cannot be empty!');
-        }
-    }
+// Update fungsi handleImageSelect
+async function handleImageSelect(input) {
+    const file = input.files[0];
+    if (file) {
+        try {
+            // Tampilkan loading indicator
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.className = 'loading-indicator active';
+            loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses gambar...';
+            input.parentNode.appendChild(loadingIndicator);
 
-    function sendMessage() {
-        const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
-        const message = document.getElementById('messageInput').value.trim();
-        if (message) {
-            let messageToSend = {
-                text: message,
-                type: 'text',
-                replyTo: selectedMessageId,
-                replyType: selectedMessageType,
-                replyToText: replyingTo
-            };
-
-            client.publish(topic, JSON.stringify(messageToSend));
-            displayMessage(' ', messageToSend);
-            document.getElementById('messageInput').value = '';
-            cancelReply();
-        } else {
-            alert('Pesan tidak boleh kosong!');
-        }
-    }
-
-    function sendImage() {
-        const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
-        const fileInput = document.getElementById('fileInput');
-        const file = fileInput.files[0];
-        if (file) {
             const reader = new FileReader();
-            reader.onloadend = () => {
+            reader.onloadend = async () => {
                 const base64data = reader.result;
+                
+                // Kompresi gambar
+                const compressedImage = await compressImage(base64data);
+                const thumbnailImage = await compressImage(base64data, 100);
+                
+                const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
                 const messageData = {
-                    text: base64data,
+                    text: compressedImage,
+                    thumbnail: thumbnailImage,
                     type: 'image',
                     replyTo: selectedMessageId,
                     replyType: selectedMessageType,
-                    replyToText: replyingTo
+                    replyToText: replyingTo,
+                    room: topic
                 };
-                client.publish(topic, JSON.stringify(messageData));
+                
+                socket.emit('message', messageData);
                 displayMessage(' ', messageData);
+                
+                // Hapus loading indicator
+                loadingIndicator.remove();
                 cancelReply();
             };
             reader.readAsDataURL(file);
+        } catch (error) {
+            console.error('Error processing image:', error);
+            alert('Gagal memproses gambar. Silakan coba lagi.');
         }
     }
+}
 
-    function displayMessage(topic, message) {
-        const chatContainer = document.getElementById('chat-container');
-        const messageElement = document.createElement('div');
-        messageElement.classList.add('message');
+// Socket event listeners
+socket.on('message', (data) => {
+    displayMessage(data.room, data);
+});
 
-        // Tambahkan style khusus untuk pesan sistem
-        if (topic === 'system') {
-            messageElement.classList.add('system');
-            const contentDiv = document.createElement('div');
-            contentDiv.classList.add('message-content');
-            contentDiv.textContent = message;
-            messageElement.appendChild(contentDiv);
-            chatContainer.appendChild(messageElement);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            return;
-        }
+socket.on('status', (data) => {
+    displayMessage('system', data.msg);
+});
 
-        // Generate unique ID untuk pesan
-        const messageId = 'msg_' + Date.now();
-        messageElement.id = messageId;
+function displayMessage(topic, message) {
+    const chatContainer = document.getElementById('chat-container');
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message');
 
-        // Event listener untuk context menu
-        messageElement.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            const messageText = typeof message === 'object' ? message.text : message;
-            showContextMenu(e, messageId, messageText, message.type);
-        });
-
-        // Event listener untuk long press di mobile
-        let pressTimer;
-        messageElement.addEventListener('touchstart', () => {
-            pressTimer = setTimeout(() => {
-                const messageText = typeof message === 'object' ? message.text : message;
-                showContextMenu(event, messageId, messageText, message.type);
-            }, 500);
-        });
-        messageElement.addEventListener('touchend', () => {
-            clearTimeout(pressTimer);
-        });
-
-        if (topic === ' ' || topic === '  ') {
-            messageElement.classList.add('sent');
-        } else {
-            messageElement.classList.add('received');
-        }
-
-        // Tambahkan reply preview jika ada
-        if (message.replyTo) {
-            const replyDiv = document.createElement('div');
-            replyDiv.classList.add('message-reply-preview');
-            
-            const replyIcon = document.createElement('i');
-            replyIcon.className = 'fas fa-reply';
-            replyDiv.appendChild(replyIcon);
-            
-            // Jika yang direply adalah gambar
-            if (message.replyType === 'image') {
-                const replyImgContainer = document.createElement('div');
-                replyImgContainer.classList.add('reply-image-container');
-                
-                const replyImg = document.createElement('img');
-                replyImg.src = message.replyToText;
-                replyImg.classList.add('reply-thumbnail');
-                
-                replyImgContainer.appendChild(replyImg);
-                replyDiv.appendChild(replyImgContainer);
-            } else {
-                const replyText = document.createElement('span');
-                replyText.textContent = message.replyToText;
-                replyDiv.appendChild(replyText);
-            }
-            
-            messageElement.appendChild(replyDiv);
-        }
-
+    // Tambahkan style khusus untuk pesan sistem
+    if (topic === 'system') {
+        messageElement.classList.add('system');
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('message-content');
-
-        if (message.type === 'image' || (typeof message === 'string' && message.startsWith('data:image/'))) {
-            const imageContainer = document.createElement('div');
-            imageContainer.classList.add('message-image-container');
-            
-            const img = document.createElement('img');
-            img.src = message.type === 'image' ? message.text : message;
-            img.classList.add('message-thumbnail');
-            img.onclick = () => showImagePreview(img.src);
-            
-            imageContainer.appendChild(img);
-            contentDiv.appendChild(imageContainer);
-        } else {
-            contentDiv.textContent = message.text || message;
-        }
-
-        const timestamp = document.createElement('span');
-        timestamp.classList.add('timestamp');
-        timestamp.textContent = new Date().toLocaleTimeString();
-        
+        contentDiv.textContent = message;
         messageElement.appendChild(contentDiv);
-        messageElement.appendChild(timestamp);
         chatContainer.appendChild(messageElement);
         chatContainer.scrollTop = chatContainer.scrollHeight;
+        return;
     }
 
-    function showContextMenu(event, messageId, messageText, messageType) {
-        event.preventDefault();
-        const contextMenu = document.getElementById('contextMenu');
-        contextMenu.style.display = 'block';
-        contextMenu.style.left = `${event.pageX}px`;
-        contextMenu.style.top = `${event.pageY}px`;
-        selectedMessageId = messageId;
-        replyingTo = messageText;
-        selectedMessageType = messageType;
-    }
+    // Generate unique ID untuk pesan
+    const messageId = 'msg_' + Date.now();
+    messageElement.id = messageId;
 
-    function replyToMessage() {
-        if (selectedMessageId && replyingTo) {
-            const replyPreview = document.getElementById('replyPreview');
-            const replyText = document.getElementById('replyText');
-            replyPreview.style.display = 'block';
-            
-            // Clear previous content
-            replyText.innerHTML = '';
-            
-            // Jika yang direply adalah gambar
-            if (selectedMessageType === 'image') {
-                const replyImgContainer = document.createElement('div');
-                replyImgContainer.classList.add('reply-image-container');
-                
-                const replyImg = document.createElement('img');
-                replyImg.src = replyingTo;
-                replyImg.classList.add('reply-thumbnail');
-                
-                replyImgContainer.appendChild(replyImg);
-                replyText.appendChild(replyImgContainer);
-            } else {
-                replyText.textContent = replyingTo;
-            }
-            
-            document.getElementById('messageInput').focus();
-        }
-        document.getElementById('contextMenu').style.display = 'none';
-    }
-
-    function cancelReply() {
-        document.getElementById('replyPreview').style.display = 'none';
-        selectedMessageId = null;
-        replyingTo = null;
-        selectedMessageType = null;
-    }
-
-    // Tambahkan event listener untuk menutup context menu saat klik di luar
-    document.addEventListener('click', () => {
-        document.getElementById('contextMenu').style.display = 'none';
+    // Event listener untuk context menu
+    messageElement.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const messageText = typeof message === 'object' ? message.text : message;
+        showContextMenu(e, messageId, messageText, message.type);
     });
 
-    // Fungsi untuk menampilkan preview gambar
-    function showImagePreview(src) {
-        const modal = document.getElementById('imagePreviewModal');
-        const previewImage = document.getElementById('previewImage');
-        previewImage.src = src;
-        modal.style.display = 'block';
+    // Event listener untuk long press di mobile
+    let pressTimer;
+    messageElement.addEventListener('touchstart', () => {
+        pressTimer = setTimeout(() => {
+            const messageText = typeof message === 'object' ? message.text : message;
+            showContextMenu(event, messageId, messageText, message.type);
+        }, 500);
+    });
+    messageElement.addEventListener('touchend', () => {
+        clearTimeout(pressTimer);
+    });
+
+    if (topic === ' ' || topic === '  ') {
+        messageElement.classList.add('sent');
+    } else {
+        messageElement.classList.add('received');
     }
 
-    // Fungsi untuk menutup preview gambar
-    function closeImagePreview() {
-        document.getElementById('imagePreviewModal').style.display = 'none';
-    }
-
-    // Fungsi untuk mengunduh gambar
-    function downloadImage() {
-        const image = document.getElementById('previewImage');
-        const link = document.createElement('a');
-        link.href = image.src;
-        link.download = 'chat-image-' + new Date().getTime() + '.jpg';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-
-    // Fungsi kompresi gambar
-    async function compressImage(base64Image, maxSize = 800) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.src = base64Image;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                
-                // Hitung rasio kompresi
-                if (width > height) {
-                    if (width > maxSize) {
-                        height = Math.round(height * maxSize / width);
-                        width = maxSize;
-                    }
-                } else {
-                    if (height > maxSize) {
-                        width = Math.round(width * maxSize / height);
-                        height = maxSize;
-                    }
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
-                
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                // Kompresi progresif
-                let quality = 0.7;
-                let compressed = canvas.toDataURL('image/jpeg', quality);
-                
-                // Jika ukuran masih terlalu besar, kompres lagi
-                while (compressed.length > 100000 && quality > 0.1) {
-                    quality -= 0.1;
-                    compressed = canvas.toDataURL('image/jpeg', quality);
-                }
-                
-                resolve(compressed);
-            };
-        });
-    }
-
-    // Fungsi untuk menampilkan opsi gambar
-    function showImageOptions(event) {
-        event.preventDefault();
-        const modal = document.getElementById('imageOptionsModal');
-        modal.style.display = 'block';
-    }
-
-    // Fungsi untuk memilih sumber gambar
-    function selectImageSource(source) {
-        const modal = document.getElementById('imageOptionsModal');
-        if (source === 'camera') {
-            document.getElementById('cameraInput').click();
+    // Tambahkan reply preview jika ada
+    if (message.replyTo) {
+        const replyDiv = document.createElement('div');
+        replyDiv.classList.add('message-reply-preview');
+        
+        const replyIcon = document.createElement('i');
+        replyIcon.className = 'fas fa-reply';
+        replyDiv.appendChild(replyIcon);
+        
+        // Jika yang direply adalah gambar
+        if (message.replyType === 'image') {
+            const replyImgContainer = document.createElement('div');
+            replyImgContainer.classList.add('reply-image-container');
+            
+            const replyImg = document.createElement('img');
+            replyImg.src = message.replyToText;
+            replyImg.classList.add('reply-thumbnail');
+            
+            replyImgContainer.appendChild(replyImg);
+            replyDiv.appendChild(replyImgContainer);
         } else {
-            document.getElementById('galleryInput').click();
+            const replyText = document.createElement('span');
+            replyText.textContent = message.replyToText;
+            replyDiv.appendChild(replyText);
         }
-        modal.style.display = 'none';
+        
+        messageElement.appendChild(replyDiv);
     }
 
-    // Update fungsi handleImageSelect
-    async function handleImageSelect(input) {
-        const file = input.files[0];
-        if (file) {
-            try {
-                // Tampilkan loading indicator
-                const loadingIndicator = document.createElement('div');
-                loadingIndicator.className = 'loading-indicator active';
-                loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses gambar...';
-                input.parentNode.appendChild(loadingIndicator);
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('message-content');
 
-                const reader = new FileReader();
-                reader.onloadend = async () => {
-                    const base64data = reader.result;
-                    
-                    // Kompresi gambar
-                    const compressedImage = await compressImage(base64data);
-                    const thumbnailImage = await compressImage(base64data, 100); // Thumbnail lebih kecil
-                    
-                    const messageData = {
-                        text: compressedImage,
-                        type: 'image',
-                        replyTo: selectedMessageId,
-                        replyType: selectedMessageType,
-                        replyToText: replyingTo,
-                        thumbnail: thumbnailImage
-                    };
+    if (message.type === 'image' || (typeof message === 'string' && message.startsWith('data:image/'))) {
+        const imageContainer = document.createElement('div');
+        imageContainer.classList.add('message-image-container');
+        
+        const img = document.createElement('img');
+        img.src = message.type === 'image' ? message.text : message;
+        img.classList.add('message-thumbnail');
+        img.onclick = () => showImagePreview(img.src);
+        
+        imageContainer.appendChild(img);
+        contentDiv.appendChild(imageContainer);
+    } else {
+        contentDiv.textContent = message.text || message;
+    }
 
-                    const topic = document.getElementById('topicInput').value.trim() || 'default/topic';
-                    client.publish(topic, JSON.stringify(messageData));
-                    displayMessage(' ', messageData);
-                    
-                    // Hapus loading indicator
-                    loadingIndicator.remove();
-                };
-                reader.readAsDataURL(file);
-            } catch (error) {
-                console.error('Error processing image:', error);
-                alert('Gagal memproses gambar. Silakan coba lagi.');
+    const timestamp = document.createElement('span');
+    timestamp.classList.add('timestamp');
+    timestamp.textContent = new Date().toLocaleTimeString();
+    
+    messageElement.appendChild(contentDiv);
+    messageElement.appendChild(timestamp);
+    chatContainer.appendChild(messageElement);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function showContextMenu(event, messageId, messageText, messageType) {
+    event.preventDefault();
+    const contextMenu = document.getElementById('contextMenu');
+    contextMenu.style.display = 'block';
+    contextMenu.style.left = `${event.pageX}px`;
+    contextMenu.style.top = `${event.pageY}px`;
+    selectedMessageId = messageId;
+    replyingTo = messageText;
+    selectedMessageType = messageType;
+}
+
+function replyToMessage() {
+    if (selectedMessageId && replyingTo) {
+        const replyPreview = document.getElementById('replyPreview');
+        const replyText = document.getElementById('replyText');
+        replyPreview.style.display = 'block';
+        
+        // Clear previous content
+        replyText.innerHTML = '';
+        
+        // Jika yang direply adalah gambar
+        if (selectedMessageType === 'image') {
+            const replyImgContainer = document.createElement('div');
+            replyImgContainer.classList.add('reply-image-container');
+            
+            const replyImg = document.createElement('img');
+            replyImg.src = replyingTo;
+            replyImg.classList.add('reply-thumbnail');
+            
+            replyImgContainer.appendChild(replyImg);
+            replyText.appendChild(replyImgContainer);
+        } else {
+            replyText.textContent = replyingTo;
+        }
+        
+        document.getElementById('messageInput').focus();
+    }
+    document.getElementById('contextMenu').style.display = 'none';
+}
+
+function cancelReply() {
+    document.getElementById('replyPreview').style.display = 'none';
+    selectedMessageId = null;
+    replyingTo = null;
+    selectedMessageType = null;
+}
+
+// Tambahkan event listener untuk menutup context menu saat klik di luar
+document.addEventListener('click', () => {
+    document.getElementById('contextMenu').style.display = 'none';
+});
+
+// Fungsi untuk menampilkan preview gambar
+function showImagePreview(src) {
+    const modal = document.getElementById('imagePreviewModal');
+    const previewImage = document.getElementById('previewImage');
+    previewImage.src = src;
+    modal.style.display = 'block';
+}
+
+// Fungsi untuk menutup preview gambar
+function closeImagePreview() {
+    document.getElementById('imagePreviewModal').style.display = 'none';
+}
+
+// Fungsi untuk mengunduh gambar
+function downloadImage() {
+    const image = document.getElementById('previewImage');
+    const link = document.createElement('a');
+    link.href = image.src;
+    link.download = 'chat-image-' + new Date().getTime() + '.jpg';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Fungsi kompresi gambar
+async function compressImage(base64Image, maxSize = 800) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Image;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // Hitung rasio kompresi
+            if (width > height) {
+                if (width > maxSize) {
+                    height = Math.round(height * maxSize / width);
+                    width = maxSize;
+                }
+            } else {
+                if (height > maxSize) {
+                    width = Math.round(width * maxSize / height);
+                    height = maxSize;
+                }
             }
-        }
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Kompresi progresif
+            let quality = 0.7;
+            let compressed = canvas.toDataURL('image/jpeg', quality);
+            
+            // Jika ukuran masih terlalu besar, kompres lagi
+            while (compressed.length > 100000 && quality > 0.1) {
+                quality -= 0.1;
+                compressed = canvas.toDataURL('image/jpeg', quality);
+            }
+            
+            resolve(compressed);
+        };
+    });
+}
+
+// Fungsi untuk menampilkan opsi gambar
+function showImageOptions(event) {
+    event.preventDefault();
+    const modal = document.getElementById('imageOptionsModal');
+    modal.style.display = 'block';
+}
+
+// Fungsi untuk memilih sumber gambar
+function selectImageSource(source) {
+    const modal = document.getElementById('imageOptionsModal');
+    if (source === 'camera') {
+        document.getElementById('cameraInput').click();
+    } else {
+        document.getElementById('galleryInput').click();
     }
+    modal.style.display = 'none';
+}
 </script>
 
 <style>
