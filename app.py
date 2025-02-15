@@ -15,43 +15,26 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=20000,  # Turunkan timeout
-    ping_interval=10000,  # Turunkan interval
-    manage_session=True,  # Aktifkan session management
+    ping_timeout=5000,  # Tingkatkan timeout
+    ping_interval=25000,  # Sesuaikan interval
+    manage_session=False,
     logger=True,
     engineio_logger=True,
     path='/socket.io/',
-    transports=['polling', 'websocket'],  # Polling dulu, lalu websocket
+    transports=['polling'],
     always_connect=True,
     max_http_buffer_size=1e8,
-    cookie=True,  # Aktifkan cookie
-    cors_credentials=True,
+    cookie=False,
+    cors_credentials=False,
     async_handlers=True,
-    max_queue_size=100,
-    upgrade_timeout=20000,  # Tambahkan timeout untuk upgrade
-    http_compression=True
+    max_queue_size=10
 )
 
-# Konfigurasi logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger('socketio')
-logger.setLevel(logging.DEBUG)
+logging.getLogger('socketio').setLevel(logging.DEBUG)
+logging.getLogger('engineio').setLevel(logging.DEBUG)
 
 # Simpan data user global
 global_users = {}
-online_users = set()
-
-# Inisialisasi scheduler untuk ping/pong
-scheduler = BackgroundScheduler()
-scheduler.start()
-
-def ping_clients():
-    try:
-        socketio.emit('ping')
-    except Exception as e:
-        print(f'Error sending ping: {str(e)}')
-
-scheduler.add_job(ping_clients, 'interval', seconds=10)  # Lebih sering ping
 
 @app.route('/')
 def index():
@@ -117,6 +100,8 @@ def handle_disconnect():
 @app.route('/global')
 def global_chat():
     return render_template('global.html')
+
+online_users = set()
 
 @socketio.on('join_global')
 def handle_global_join(data):
