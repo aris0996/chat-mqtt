@@ -21,12 +21,13 @@ socketio = SocketIO(
     logger=True,
     engineio_logger=True,
     path='/socket.io/',
-    transports=['polling', 'websocket'],
+    transports=['polling'],
     always_connect=True,
     max_http_buffer_size=1e8,
     cookie=False,
     cors_credentials=False,
-    async_handlers=True
+    async_handlers=True,
+    max_queue_size=10
 )
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
@@ -141,6 +142,6 @@ if __name__ == '__main__':
         app,
         debug=True,
         host='0.0.0.0',
-        port=int(os.getenv('PORT', 5000)),
+        port=5000,
         allow_unsafe_werkzeug=True
     )
