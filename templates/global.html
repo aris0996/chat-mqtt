@@ -112,15 +112,15 @@ let selectedMessageId = null;
 let replyingTo = null;
 let selectedMessageType = null;
 
-// Konfigurasi Socket.IO untuk Vercel
+// Konfigurasi Socket.IO yang lebih stabil
 const socket = io({
     transports: ['polling'],
     upgrade: false,
     reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 3000,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000,
     reconnectionDelayMax: 10000,
-    timeout: 10000,
+    timeout: 5000,
     autoConnect: true,
     forceNew: false,
     path: '/socket.io/',
@@ -131,41 +131,45 @@ const socket = io({
     }
 });
 
-// Tambahkan error handling khusus Vercel
+// Socket connection handlers
+socket.on('connect', () => {
+    console.log('Connected to server with ID:', socket.id);
+});
+
 socket.on('connect_error', (error) => {
     console.error('Connection error:', error);
-    // Gunakan fixed delay untuk Vercel
+    // Gunakan exponential backoff
+    const delay = Math.min(2000 * Math.pow(2, socket.reconnectionAttempts), 10000);
     setTimeout(() => {
-        console.log('Mencoba koneksi ulang...');
+        console.log(`Mencoba koneksi ulang dalam ${delay}ms...`);
         socket.connect();
-    }, 3000);
+    }, delay);
 });
 
 socket.on('disconnect', (reason) => {
     console.log('Disconnected:', reason);
-    if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'transport error') {
+    if (reason === 'io server disconnect' || reason === 'transport close') {
         setTimeout(() => {
             console.log('Mencoba koneksi ulang...');
             socket.connect();
-        }, 3000);
+        }, 2000);
     }
 });
 
-// Simplified ping/pong untuk Vercel
-let pingInterval = setInterval(() => {
+socket.on('error', (error) => {
+    console.error('Socket error:', error);
+    socket.connect();
+});
+
+// Tambahkan ping/pong untuk menjaga koneksi
+setInterval(() => {
     if (socket.connected) {
         socket.emit('ping');
     }
 }, 25000);
 
 socket.on('pong', () => {
-    console.log('Connection alive');
-});
-
-// Cleanup pada unload
-window.addEventListener('beforeunload', () => {
-    clearInterval(pingInterval);
-    socket.disconnect();
+    console.log('Pong received from server');
 });
 
 // Update fungsi untuk menggunakan Socket.IO
