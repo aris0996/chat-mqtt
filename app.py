@@ -15,19 +15,23 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=5000,
+    ping_timeout=60000,
     ping_interval=25000,
-    manage_session=False,
+    manage_session=True,
     logger=True,
     engineio_logger=True,
     path='/socket.io/',
-    transports=['polling', 'websocket'],
+    transports=['websocket', 'polling'],
     always_connect=True,
     max_http_buffer_size=1e8,
-    cookie=False,
-    cors_credentials=False,
+    cookie=True,
+    cors_credentials=True,
     async_handlers=True,
-    max_queue_size=10
+    max_queue_size=100,
+    ping_interval_grace_period=10000,
+    upgrade_timeout=60000,
+    max_payload_size=1000000,
+    http_compression=True
 )
 
 # Konfigurasi logging
