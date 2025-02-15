@@ -15,17 +15,17 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=60,  # Turunkan timeout ke 60 detik
-    ping_interval=25,  # Turunkan interval ke 25 detik
-    manage_session=True,  # Aktifkan session management
+    ping_timeout=60,
+    ping_interval=25,
+    manage_session=False,  # Nonaktifkan session management
     logger=True,
     engineio_logger=True,
     path='/socket.io/',
-    transports=['polling'],  # Gunakan polling saja untuk Vercel
+    transports=['polling'],
     always_connect=True,
     max_http_buffer_size=1e8,
-    cookie=True,  # Aktifkan cookie untuk session
-    cors_credentials=True,
+    cookie=None,  # Nonaktifkan cookie
+    cors_credentials=False,
     async_handlers=True,
     max_queue_size=100
 )
