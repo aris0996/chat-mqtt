@@ -15,16 +15,16 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=120,  # Tambah timeout
-    ping_interval=30,  # Sesuaikan interval
-    manage_session=True,  # Enable session management
+    ping_timeout=60,
+    ping_interval=25,
+    manage_session=False,  # Disable session management
     logger=True,
     engineio_logger=True,
     path='/socket.io/',
     transports=['polling'],  # Gunakan polling saja
     always_connect=True,
     max_http_buffer_size=1e8,
-    cookie=True  # Enable cookie untuk session
+    cookie=False  # Disable cookie untuk menghindari masalah
 )
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)

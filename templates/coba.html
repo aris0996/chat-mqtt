@@ -110,16 +110,20 @@ let selectedMessageType = null;
 
 // Konfigurasi Socket.IO
 const socket = io({
-    transports: ['polling', 'websocket'],
-    upgrade: true,
+    transports: ['polling'],
+    upgrade: false,
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     timeout: 60000,
     autoConnect: true,
-    forceNew: true,
-    path: '/socket.io/'
+    forceNew: false,
+    path: '/socket.io/',
+    withCredentials: false,
+    query: {
+        t: Date.now()
+    }
 });
 
 // Socket connection handlers
@@ -136,6 +140,9 @@ socket.on('connect_error', (error) => {
 
 socket.on('disconnect', (reason) => {
     console.log('Disconnected:', reason);
+    if (reason === 'io server disconnect') {
+        socket.connect();
+    }
 });
 
 socket.on('error', (error) => {
