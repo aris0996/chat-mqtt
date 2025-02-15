@@ -9,7 +9,7 @@ import time
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "chat.arisdev.my.id"}})
 
 # Konfigurasi SocketIO yang dioptimalkan untuk Vercel
 socketio = SocketIO(
@@ -22,7 +22,7 @@ socketio = SocketIO(
     logger=True,
     engineio_logger=True,
     path='/socket.io/',
-    transports=['polling'],  # Gunakan polling saja untuk stabilitas
+    transports=['polling', 'websocket'],  # Gunakan polling saja untuk stabilitas
     always_connect=True,
     max_http_buffer_size=1e8,
     cookie=True,  # Aktifkan cookie untuk session
