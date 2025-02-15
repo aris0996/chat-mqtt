@@ -112,21 +112,22 @@ let selectedMessageId = null;
 let replyingTo = null;
 let selectedMessageType = null;
 
-// Konfigurasi Socket.IO
+// Konfigurasi Socket.IO yang lebih stabil
 const socket = io({
-    transports: ['polling'],  // Gunakan polling saja
-    upgrade: false,  // Nonaktifkan upgrade
+    transports: ['polling'],
+    upgrade: false,
     reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 60000,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 10000,
+    timeout: 5000,
     autoConnect: true,
-    forceNew: false,  // Ubah ke false
+    forceNew: false,
     path: '/socket.io/',
-    withCredentials: false,  // Disable credentials
+    withCredentials: false,
     query: {
-        t: Date.now()  // Tambahkan timestamp
+        t: Date.now(),
+        EIO: 4
     }
 });
 
@@ -137,20 +138,38 @@ socket.on('connect', () => {
 
 socket.on('connect_error', (error) => {
     console.error('Connection error:', error);
+    // Gunakan exponential backoff
+    const delay = Math.min(2000 * Math.pow(2, socket.reconnectionAttempts), 10000);
     setTimeout(() => {
+        console.log(`Mencoba koneksi ulang dalam ${delay}ms...`);
         socket.connect();
-    }, 1000);
+    }, delay);
 });
 
 socket.on('disconnect', (reason) => {
     console.log('Disconnected:', reason);
-    if (reason === 'io server disconnect') {
-        socket.connect();
+    if (reason === 'io server disconnect' || reason === 'transport close') {
+        setTimeout(() => {
+            console.log('Mencoba koneksi ulang...');
+            socket.connect();
+        }, 2000);
     }
 });
 
 socket.on('error', (error) => {
     console.error('Socket error:', error);
+    socket.connect();
+});
+
+// Tambahkan ping/pong untuk menjaga koneksi
+setInterval(() => {
+    if (socket.connected) {
+        socket.emit('ping');
+    }
+}, 25000);
+
+socket.on('pong', () => {
+    console.log('Pong received from server');
 });
 
 // Update fungsi untuk menggunakan Socket.IO

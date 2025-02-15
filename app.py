@@ -10,21 +10,24 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Update konfigurasi SocketIO
+# Konfigurasi SocketIO yang lebih stabil
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=60,
-    ping_interval=25,
-    manage_session=False,  # Disable session management
+    ping_timeout=5000,  # Tingkatkan timeout
+    ping_interval=25000,  # Sesuaikan interval
+    manage_session=False,
     logger=True,
     engineio_logger=True,
     path='/socket.io/',
-    transports=['polling'],  # Gunakan polling saja
+    transports=['polling'],
     always_connect=True,
     max_http_buffer_size=1e8,
-    cookie=False  # Disable cookie untuk menghindari masalah
+    cookie=False,
+    cors_credentials=False,
+    async_handlers=True,
+    max_queue_size=10
 )
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
