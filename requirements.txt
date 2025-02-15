@@ -6,6 +6,7 @@ colorama==0.4.6
 dnspython==2.7.0
 Flask==2.3.3
 Flask-Cors==3.0.10
+Flask-SocketIO==5.3.6
 gunicorn==20.1.0
 h11==0.14.0
 itsdangerous==2.2.0
@@ -18,5 +19,5 @@ six==1.16.0
 tzdata==2024.2
 tzlocal==5.2
 uvicorn==0.22.0
+eventlet==0.33.3
 Werkzeug>=2.2.0
-
