@@ -2,11 +2,6 @@
   "version": 2,
   "builds": [
     {
-      "src": "vercel-build.sh",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "." }
-    },
-    {
       "src": "app.py",
       "use": "@vercel/python"
     },
@@ -19,14 +14,6 @@
     {
       "src": "/static/(.*)",
       "dest": "/static/$1"
-    },
-    {
-      "src": "/favicon.ico",
-      "dest": "/static/favicon.ico"
-    },
-    {
-      "src": "/favicon.png",
-      "dest": "/static/favicon.png"
     },
     {
       "src": "/socket.io/(.*)",
@@ -42,8 +29,5 @@
       "src": "/(.*)",
       "dest": "app.py"
     }
-  ],
-  "env": {
-    "PYTHONUNBUFFERED": "1"
-  }
+  ]
 }
