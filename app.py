@@ -15,11 +15,16 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=60,  # Tambah timeout
-    ping_interval=25,  # Sesuaikan interval
-    manage_session=False,  # Disable session management
+    ping_timeout=60,
+    ping_interval=25,
+    manage_session=False,
     logger=True,
-    engineio_logger=True
+    engineio_logger=True,
+    path='/socket.io/',
+    transports=['polling', 'websocket'],
+    always_connect=True,
+    max_http_buffer_size=1e8,
+    allow_upgrades=False  # Disable upgrades untuk menghindari masalah WebSocket
 )
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
