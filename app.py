@@ -10,13 +10,13 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Konfigurasi SocketIO yang lebih stabil
+# Konfigurasi SocketIO untuk Vercel
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode='threading',
-    ping_timeout=5000,  # Tingkatkan timeout
-    ping_interval=25000,  # Sesuaikan interval
+    async_mode=None,  # Biarkan SocketIO memilih mode yang sesuai
+    ping_timeout=10000,
+    ping_interval=25000,
     manage_session=False,
     logger=True,
     engineio_logger=True,
@@ -26,12 +26,18 @@ socketio = SocketIO(
     max_http_buffer_size=1e8,
     cookie=False,
     cors_credentials=False,
-    async_handlers=True,
-    max_queue_size=10
+    async_handlers=False,  # Disable async handlers di Vercel
+    max_queue_size=10,
+    # Tambahan untuk Vercel
+    message_queue=None,
+    channel='socketio',
+    write_only=False
 )
 
-logging.getLogger('socketio').setLevel(logging.DEBUG)
-logging.getLogger('engineio').setLevel(logging.DEBUG)
+# Konfigurasi logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('socketio')
+logger.setLevel(logging.INFO)
 
 # Simpan data user global
 global_users = {}
@@ -66,11 +72,11 @@ def on_leave(data):
 
 @socketio.on_error_default
 def default_error_handler(e):
-    print(f'SocketIO error occurred: {str(e)}')
+    logger.error(f'SocketIO error occurred: {str(e)}')
     try:
         emit('error', {'message': 'An error occurred', 'details': str(e)})
     except Exception as emit_error:
-        print(f'Error sending error message: {str(emit_error)}')
+        logger.error(f'Error sending error message: {str(emit_error)}')
 
 @socketio.on('connect')
 def handle_connect():
@@ -136,6 +142,13 @@ def handle_global_message(data):
         message_data['replyToText'] = data.get('replyToText', '')
     
     emit('global_message', message_data, broadcast=True)
+
+@socketio.on('ping')
+def handle_ping():
+    try:
+        emit('pong')
+    except Exception as e:
+        logger.error(f'Error handling ping: {str(e)}')
 
 if __name__ == '__main__':
     socketio.run(
