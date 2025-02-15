@@ -110,48 +110,61 @@ let selectedMessageType = null;
 
 // Konfigurasi Socket.IO
 const socket = io({
-    transports: ['websocket', 'polling'],
-    upgrade: true,
-    rememberUpgrade: true,
+    transports: ['polling'],
+    upgrade: false,
     reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 10000,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 10000,
+    timeout: 5000,
     autoConnect: true,
+    forceNew: false,
     path: '/socket.io/',
+    withCredentials: false,
     query: {
-        t: Date.now()
-    },
-    extraHeaders: {
-        'Cache-Control': 'no-cache'
+        t: Date.now(),
+        EIO: 4
     }
 });
 
-// Tambahkan handler reconnect
-socket.on('reconnect_attempt', (attemptNumber) => {
-    console.log(`Mencoba koneksi ulang (${attemptNumber})...`);
+// Socket connection handlers
+socket.on('connect', () => {
+    console.log('Connected to server');
 });
 
-socket.on('reconnect', (attemptNumber) => {
-    console.log(`Berhasil koneksi ulang setelah ${attemptNumber} percobaan`);
-    // Refresh data jika perlu
-    const subscribeTopic = document.getElementById('subscribeTopicInput').value;
-    if (subscribeTopic) {
-        socket.emit('join', {
-            username: subscribeTopic,
-            room: subscribeTopic
-        });
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+    const delay = Math.min(2000 * Math.pow(2, socket.reconnectionAttempts), 10000);
+    setTimeout(() => {
+        console.log(`Mencoba koneksi ulang dalam ${delay}ms...`);
+        socket.connect();
+    }, delay);
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('Disconnected:', reason);
+    if (reason === 'io server disconnect' || reason === 'transport close') {
+        setTimeout(() => {
+            console.log('Mencoba koneksi ulang...');
+            socket.connect();
+        }, 2000);
     }
 });
 
-socket.on('reconnect_error', (error) => {
-    console.error('Gagal koneksi ulang:', error);
+socket.on('error', (error) => {
+    console.error('Socket error:', error);
+    socket.connect();
 });
 
-socket.on('reconnect_failed', () => {
-    console.error('Gagal melakukan koneksi ulang setelah beberapa percobaan');
-    alert('Koneksi terputus. Silakan refresh halaman.');
+// Tambahkan ping/pong
+setInterval(() => {
+    if (socket.connected) {
+        socket.emit('ping');
+    }
+}, 25000);
+
+socket.on('pong', () => {
+    console.log('Pong received from server');
 });
 
 function toggleModal() {
