@@ -5,6 +5,7 @@ import os
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from engineio.async_drivers import threading
+import eventlet
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
@@ -14,21 +15,22 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode='threading',
-    ping_timeout=5000,  # Tingkatkan timeout
-    ping_interval=25000,  # Sesuaikan interval
+    async_mode='eventlet',
+    ping_timeout=10000,
+    ping_interval=5000,
     manage_session=False,
     logger=True,
     engineio_logger=True,
     path='/socket.io/',
-    transports=['polling'],
+    transports=['websocket', 'polling'],
     always_connect=True,
     max_http_buffer_size=1e8,
     cookie=False,
-    cors_credentials=False,
-    async_handlers=True,
-    max_queue_size=10
+    cors_credentials=False
 )
+
+# Tambahkan eventlet monkey patching
+eventlet.monkey_patch()
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
 logging.getLogger('engineio').setLevel(logging.DEBUG)
@@ -143,5 +145,5 @@ if __name__ == '__main__':
         debug=True,
         host='0.0.0.0',
         port=5000,
-        allow_unsafe_werkzeug=True
+        use_reloader=False,
     )
