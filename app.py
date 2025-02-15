@@ -7,7 +7,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from engineio.async_drivers import threading
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.urandom(24)  # Generate random secret key
+app.config['SECRET_KEY'] = 'your-secret-key-here'  # Gunakan secret key yang tetap
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Update konfigurasi SocketIO
@@ -15,17 +15,11 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    ping_timeout=20,
-    ping_interval=10,
+    ping_timeout=60,  # Tambah timeout
+    ping_interval=25,  # Sesuaikan interval
+    manage_session=False,  # Disable session management
     logger=True,
-    engineio_logger=True,
-    manage_session=True,
-    always_connect=True,
-    path='/socket.io/',
-    allow_upgrades=True,
-    upgrade_timeout=10000,
-    max_http_buffer_size=1e8,
-    transports=['polling', 'websocket']
+    engineio_logger=True
 )
 
 logging.getLogger('socketio').setLevel(logging.DEBUG)
@@ -141,5 +135,5 @@ if __name__ == '__main__':
         debug=True,
         host='0.0.0.0',
         port=5000,
-        allow_unsafe_werkzeug=True  # Hanya untuk development
+        allow_unsafe_werkzeug=True
     )

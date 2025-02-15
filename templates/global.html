@@ -117,11 +117,13 @@ const socket = io({
     transports: ['polling', 'websocket'],
     upgrade: true,
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    timeout: 20000,
-    autoConnect: true
+    timeout: 60000,
+    autoConnect: true,
+    forceNew: true,
+    path: '/socket.io/'
 });
 
 // Socket connection handlers
@@ -131,10 +133,17 @@ socket.on('connect', () => {
 
 socket.on('connect_error', (error) => {
     console.error('Connection error:', error);
+    setTimeout(() => {
+        socket.connect();
+    }, 1000);
 });
 
 socket.on('disconnect', (reason) => {
     console.log('Disconnected:', reason);
+});
+
+socket.on('error', (error) => {
+    console.error('Socket error:', error);
 });
 
 // Update fungsi untuk menggunakan Socket.IO
